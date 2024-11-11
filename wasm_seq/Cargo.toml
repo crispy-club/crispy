@@ -1,0 +1,17 @@
+[package]
+name = "wasm_seq"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Brian Sorahan <bsorahan@gmail.com>"]
+license = "ISC"
+
+keywords = ["midi", "plugin", "livecoding", "algorave"]
+description = "A sample-accurate livecoding MIDI event sequencer"
+repository = "https://github.com/briansorahan/wasmseq"
+
+[dependencies]
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs"] }
+
+[lib]
+crate-type = ["cdylib"]
