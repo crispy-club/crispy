@@ -49,11 +49,6 @@ impl PrecisePattern {
         let mut events_map: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::new();
 
         for event in pattern.events {
-            // For each event in the user's pattern, we are going to add a
-            // MIDI NoteOn event and MIDI NoteOff event.
-            // When we advance to the next event in the user's pattern
-            // we have to also advance our sample counter by the dur_beats of
-            // the event.
             events_map.insert(
                 sample_idx,
                 vec![SimpleNoteEvent {
@@ -95,16 +90,18 @@ impl PrecisePattern {
 
     fn get_events(&self, start: usize, end: usize) -> Vec<SimpleNoteEvent> {
         let mut note_events: Vec<SimpleNoteEvent> = Vec::new();
-        for sample_index in (start..end).map(|x| x as usize) {
+
+        let adj_start = start % self.length_samples;
+        let adj_end = end % self.length_samples;
+
+        for sample_index in (adj_start..adj_end).map(|x| x as usize) {
             match self.events.get(&sample_index) {
                 None => (),
-                // Need to adjust the timing so that it is relative to the
-                // current audio buffer.
+                // Need to adjust the timing so that it is relative to the current audio buffer.
                 Some(events) => {
-                    nih_log!("got events for {}", sample_index,);
                     note_events.extend(events.into_iter().cloned().map(|ev| SimpleNoteEvent {
                         note_type: ev.note_type,
-                        timing: ((ev.timing as usize) - start) as u32,
+                        timing: ((ev.timing as usize) - adj_start) as u32,
                         voice_id: ev.voice_id,
                         channel: ev.channel,
                         note: ev.note,
@@ -162,8 +159,9 @@ impl WasmSeq {
         self.playing = true;
 
         nih_log!(
-            "starting wasm seq (audio buffer size {}) (default pattern length {} samples)",
-            buffer.samples(),
+            "starting wasm seq (sample rate {}) (tempo {}) (default pattern length {} samples)",
+            transport.sample_rate,
+            transport.tempo.unwrap_or(120.0),
             precise_pattern.length_samples,
         );
         self.precise_pattern = Some(precise_pattern);
@@ -203,19 +201,28 @@ struct WasmSeqParams {
 
 impl Default for WasmSeq {
     fn default() -> Self {
-        let event = Event {
-            note: Note {
-                note_num: 60,
-                velocity: 0.8,
-                dur_ms: 20,
-            },
-            dur_beats: 1.0,
-        };
         Self {
             params: Arc::new(WasmSeqParams::default()),
             playing: false,
             pattern: Pattern {
-                events: vec![event],
+                events: vec![
+                    Event {
+                        note: Note {
+                            note_num: 60,
+                            velocity: 0.8,
+                            dur_ms: 20,
+                        },
+                        dur_beats: 1.0,
+                    },
+                    Event {
+                        note: Note {
+                            note_num: 96,
+                            velocity: 0.8,
+                            dur_ms: 20,
+                        },
+                        dur_beats: 1.0,
+                    },
+                ],
             },
             // We need the tempo and sample rate to properly initialize this.
             // Will be done on the first process() call.
@@ -287,6 +294,10 @@ impl Plugin for WasmSeq {
             self.playing = false;
         }
         ProcessStatus::Normal
+    }
+
+    fn deactivate(&mut self) -> () {
+        nih_log!("deactivating...");
     }
 }
 
