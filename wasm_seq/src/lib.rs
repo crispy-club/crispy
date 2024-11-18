@@ -20,13 +20,13 @@ pub struct Pattern {
     events: Vec<Event>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum NoteType {
     On,
     Off,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct SimpleNoteEvent {
     note_type: NoteType,
     timing: u32,
@@ -89,10 +89,25 @@ impl PrecisePattern {
     }
 
     fn get_events(&self, start: usize, end: usize) -> Vec<SimpleNoteEvent> {
-        let mut note_events: Vec<SimpleNoteEvent> = Vec::new();
-
         let adj_start = start % self.length_samples;
         let adj_end = end % self.length_samples;
+
+        if adj_end < adj_start {
+            let mut pat_end = self.get_events_adj(adj_start, self.length_samples - 1, 0);
+            let next_pat = self.get_events_adj(0, adj_end, self.length_samples - adj_start);
+            pat_end.extend(next_pat);
+            return pat_end;
+        }
+        return self.get_events_adj(adj_start, adj_end, 0);
+    }
+
+    fn get_events_adj(
+        &self,
+        adj_start: usize,
+        adj_end: usize,
+        timing_offset: usize,
+    ) -> Vec<SimpleNoteEvent> {
+        let mut note_events: Vec<SimpleNoteEvent> = Vec::new();
 
         for sample_index in (adj_start..adj_end).map(|x| x as usize) {
             match self.events.get(&sample_index) {
@@ -101,7 +116,7 @@ impl PrecisePattern {
                 Some(events) => {
                     note_events.extend(events.into_iter().cloned().map(|ev| SimpleNoteEvent {
                         note_type: ev.note_type,
-                        timing: ((ev.timing as usize) - adj_start) as u32,
+                        timing: ((ev.timing as usize) - adj_start + timing_offset) as u32,
                         voice_id: ev.voice_id,
                         channel: ev.channel,
                         note: ev.note,
@@ -316,3 +331,101 @@ impl Vst3Plugin for WasmSeq {
 
 nih_export_clap!(WasmSeq);
 nih_export_vst3!(WasmSeq);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_precise_pattern() -> Result<(), String> {
+        let pattern = Pattern {
+            events: vec![
+                Event {
+                    note: Note {
+                        note_num: 60,
+                        velocity: 0.8,
+                        dur_ms: 20,
+                    },
+                    dur_beats: 1.0,
+                },
+                Event {
+                    note: Note {
+                        note_num: 96,
+                        velocity: 0.8,
+                        dur_ms: 20,
+                    },
+                    dur_beats: 1.0,
+                },
+            ],
+        };
+        let sample_rate = 48000 as f32;
+        let tempo = 110 as f64;
+        let precise_pattern = PrecisePattern::from(pattern.clone(), sample_rate, tempo);
+        let buffer_size_samples = 256 as usize;
+        let expectations: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::from([
+            (
+                0,
+                vec![SimpleNoteEvent {
+                    note_type: NoteType::On,
+                    timing: 0,
+                    voice_id: None,
+                    channel: 1,
+                    note: 60,
+                    velocity: 0.8,
+                }],
+            ),
+            (
+                3,
+                vec![SimpleNoteEvent {
+                    note_type: NoteType::Off,
+                    timing: 192,
+                    voice_id: None,
+                    channel: 1,
+                    note: 60,
+                    velocity: 0.0,
+                }],
+            ),
+            (
+                102,
+                vec![SimpleNoteEvent {
+                    note_type: NoteType::On,
+                    timing: 69,
+                    voice_id: None,
+                    channel: 1,
+                    note: 96,
+                    velocity: 0.8,
+                }],
+            ),
+            (
+                106,
+                vec![SimpleNoteEvent {
+                    note_type: NoteType::Off,
+                    timing: 5,
+                    voice_id: None,
+                    channel: 1,
+                    note: 96,
+                    velocity: 0.0,
+                }],
+            ),
+            (
+                204,
+                vec![SimpleNoteEvent {
+                    note_type: NoteType::On,
+                    timing: 138,
+                    voice_id: None,
+                    channel: 1,
+                    note: 60,
+                    velocity: 0.8,
+                }],
+            ),
+        ]);
+        for (bufnum, expected_events) in expectations.into_iter() {
+            let buffer_start_samples = bufnum * buffer_size_samples;
+            let buffer_end_samples = buffer_start_samples + buffer_size_samples;
+            let events = precise_pattern.get_events(buffer_start_samples, buffer_end_samples);
+            assert_eq!(expected_events, events);
+        }
+        Ok(())
+    }
+}
