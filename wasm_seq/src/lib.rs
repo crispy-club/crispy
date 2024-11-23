@@ -131,9 +131,9 @@ impl PrecisePattern {
 
 pub struct WasmSeq {
     params: Arc<WasmSeqParams>,
-    pattern: Pattern,
+    patterns: HashMap<String, Pattern>,
     playing: bool,
-    precise_pattern: Option<PrecisePattern>,
+    precise_patterns: HashMap<String, PrecisePattern>,
 }
 
 impl WasmSeq {
@@ -145,7 +145,7 @@ impl WasmSeq {
         let transport = context.transport();
         let pos_samples = transport.pos_samples().unwrap_or(0) as usize;
 
-        if let Some(precise_pattern) = &self.precise_pattern {
+        if let Some(precise_pattern) = self.get_current_pattern() {
             for event in precise_pattern.get_events(pos_samples, pos_samples + buffer.samples()) {
                 nih_log!(
                     "playing event {:?} within buffer starting at {} and ending at {}",
@@ -159,6 +159,14 @@ impl WasmSeq {
         ProcessStatus::Normal
     }
 
+    fn get_current_pattern(&mut self) -> Option<&PrecisePattern> {
+        match self.params.pattern.value() {
+            0 => self.precise_patterns.get("first"),
+            1 => self.precise_patterns.get("second"),
+            _ => None,
+        }
+    }
+
     fn start(
         &mut self,
         buffer: &mut Buffer,
@@ -166,20 +174,21 @@ impl WasmSeq {
     ) -> ProcessStatus {
         let transport = context.transport();
 
-        let precise_pattern = PrecisePattern::from(
-            self.pattern.clone(),
-            transport.sample_rate,
-            transport.tempo.unwrap_or(120.0),
-        );
+        for (name, pattern) in self.patterns.clone().into_iter() {
+            let precise_pattern = PrecisePattern::from(
+                pattern,
+                transport.sample_rate,
+                transport.tempo.unwrap_or(120.0),
+            );
+            self.precise_patterns.insert(name.clone(), precise_pattern);
+        }
         self.playing = true;
 
         nih_log!(
-            "starting wasm seq (sample rate {}) (tempo {}) (default pattern length {} samples)",
+            "starting wasm seq (sample rate {}) (tempo {})",
             transport.sample_rate,
             transport.tempo.unwrap_or(120.0),
-            precise_pattern.length_samples,
         );
-        self.precise_pattern = Some(precise_pattern);
         self.play(buffer, context);
 
         return ProcessStatus::Normal;
@@ -207,19 +216,16 @@ impl WasmSeq {
 
 #[derive(Params)]
 struct WasmSeqParams {
-    #[id = "note"]
-    pub note: IntParam,
-
-    #[id = "dur_ms"]
-    pub dur_ms: IntParam,
+    #[id = "pattern"]
+    pub pattern: IntParam,
 }
 
 impl Default for WasmSeq {
     fn default() -> Self {
-        Self {
-            params: Arc::new(WasmSeqParams::default()),
-            playing: false,
-            pattern: Pattern {
+        let mut patterns = HashMap::new();
+        patterns.insert(
+            String::from("first"),
+            Pattern {
                 events: vec![
                     Event {
                         note: Note {
@@ -239,9 +245,37 @@ impl Default for WasmSeq {
                     },
                 ],
             },
+        );
+        patterns.insert(
+            String::from("second"),
+            Pattern {
+                events: vec![
+                    Event {
+                        note: Note {
+                            note_num: 60,
+                            velocity: 0.8,
+                            dur_ms: 20,
+                        },
+                        dur_beats: 0.5,
+                    },
+                    Event {
+                        note: Note {
+                            note_num: 96,
+                            velocity: 0.8,
+                            dur_ms: 20,
+                        },
+                        dur_beats: 0.5,
+                    },
+                ],
+            },
+        );
+        Self {
+            params: Arc::new(WasmSeqParams::default()),
+            playing: false,
+            patterns: patterns,
             // We need the tempo and sample rate to properly initialize this.
             // Will be done on the first process() call.
-            precise_pattern: None,
+            precise_patterns: HashMap::new(),
         }
     }
 }
@@ -249,12 +283,7 @@ impl Default for WasmSeq {
 impl Default for WasmSeqParams {
     fn default() -> Self {
         Self {
-            note: IntParam::new("MIDI Note", 60, IntRange::Linear { min: 0, max: 127 }),
-            dur_ms: IntParam::new(
-                "Note Duration (ms)",
-                20,
-                IntRange::Linear { min: 5, max: 200 },
-            ),
+            pattern: IntParam::new("Pattern", 0, IntRange::Linear { min: 0, max: 1 }),
         }
     }
 }
