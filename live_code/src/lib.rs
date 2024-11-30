@@ -1,9 +1,13 @@
 #[allow(unused_imports)]
-use axum::{body::Bytes, extract::State, http::StatusCode, response, routing::post, Json, Router};
+use axum::{
+    body::Bytes, extract::Path, extract::State, http::StatusCode, response, routing::post, Json,
+    Router,
+};
 use nih_plug::prelude::*;
 use rtrb::{Consumer, PopError, Producer, RingBuffer};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::sync::oneshot;
@@ -16,8 +20,14 @@ pub struct Note {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub enum EventType {
+    Rest,
+    NoteEvent(Note),
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Event {
-    note: Note,
+    action: EventType,
     dur_beats: f64,
 }
 
@@ -26,10 +36,17 @@ pub struct Pattern {
     events: Vec<Event>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct NamedPattern {
+    name: String,
+    events: Vec<Event>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum NoteType {
     On,
     Off,
+    Rest,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -46,52 +63,71 @@ struct SimpleNoteEvent {
 struct PrecisePattern {
     events: HashMap<usize, Vec<SimpleNoteEvent>>,
     length_samples: usize,
+    playing: bool,
 }
 
 impl PrecisePattern {
-    fn from(pattern: Pattern, sample_rate: f32, tempo: f64) -> PrecisePattern {
+    fn from(pattern: Pattern, sample_rate: f32, tempo: f64, playing: bool) -> PrecisePattern {
         let samples_per_beat = (sample_rate as f64 * (60.0 / tempo)) as usize;
         let samples_per_milli = sample_rate / 1000.0;
         let mut sample_idx: usize = 0;
         let mut events_map: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::new();
 
         for event in pattern.events {
-            events_map.insert(
-                sample_idx,
-                vec![SimpleNoteEvent {
-                    note_type: NoteType::On,
-                    timing: sample_idx as u32,
-                    voice_id: None,
-                    channel: 1,
-                    note: event.note.note_num,
-                    velocity: event.note.velocity,
-                }],
-            );
-            let note_off_timing = (sample_idx
-                + ((samples_per_milli as f64) * (event.note.dur_ms as f64)) as usize)
-                as u32;
+            match event.action {
+                EventType::NoteEvent(note) => {
+                    events_map.insert(
+                        sample_idx,
+                        vec![SimpleNoteEvent {
+                            note_type: NoteType::On,
+                            timing: sample_idx as u32,
+                            voice_id: None,
+                            channel: 1,
+                            note: note.note_num,
+                            velocity: note.velocity,
+                        }],
+                    );
+                    let note_off_timing = (sample_idx
+                        + ((samples_per_milli as f64) * (note.dur_ms as f64)) as usize)
+                        as u32;
 
-            events_map.insert(
-                note_off_timing as usize,
-                vec![SimpleNoteEvent {
-                    note_type: NoteType::Off,
-                    timing: note_off_timing,
-                    voice_id: None,
-                    channel: 1,
-                    note: event.note.note_num,
-                    velocity: 0.0,
-                }],
-            );
+                    events_map.insert(
+                        note_off_timing as usize,
+                        vec![SimpleNoteEvent {
+                            note_type: NoteType::Off,
+                            timing: note_off_timing,
+                            voice_id: None,
+                            channel: 1,
+                            note: note.note_num,
+                            velocity: 0.0,
+                        }],
+                    );
+                }
+                EventType::Rest => {
+                    events_map.insert(
+                        sample_idx,
+                        vec![SimpleNoteEvent {
+                            note_type: NoteType::Rest,
+                            timing: 0,
+                            voice_id: None,
+                            channel: 1,
+                            note: 0,
+                            velocity: 0.0,
+                        }],
+                    );
+                }
+            }
             sample_idx += ((samples_per_beat as f64) * event.dur_beats) as usize;
         }
         return PrecisePattern {
             events: events_map,
             length_samples: sample_idx,
+            playing: playing,
         };
     }
 
     fn get_events(&self, start: usize, end: usize) -> Vec<SimpleNoteEvent> {
-        if self.length_samples == 0 {
+        if self.length_samples == 0 || !self.playing {
             return vec![];
         }
         let adj_start = start % self.length_samples;
@@ -177,7 +213,13 @@ impl Live {
         //     transport.bar_start_pos_beats().unwrap_or(0.0),
         //     transport.bar_number().unwrap_or(0),
         // );
-        if let Some(precise_pattern) = self.get_current_pattern(context) {
+        if let Err(_) = self.process_commands(context) {
+            return ProcessStatus::Error("error processing commands");
+        }
+        for precise_pattern in self.precise_patterns.values() {
+            if !precise_pattern.playing {
+                continue;
+            }
             for event in precise_pattern.get_events(pos_samples, pos_samples + buffer.samples()) {
                 self.send(context, event);
             }
@@ -185,49 +227,50 @@ impl Live {
         ProcessStatus::Normal
     }
 
-    fn get_current_pattern(
+    fn process_commands(
         &mut self,
         context: &mut impl ProcessContext<Self>,
-    ) -> Option<PrecisePattern> {
+    ) -> Result<(), Box<dyn Error>> {
         if let Some(cmds) = self.commands_rx.as_mut() {
             match cmds.pop() {
-                Ok(Command::PatternStart(pattern)) => self.set_current_pattern(context, pattern),
+                Ok(Command::PatternStart(pattern)) => self.start_pattern(context, pattern),
                 // TODO: handle this command
-                Ok(Command::PatternStop(_)) => {
-                    self.precise_patterns.get(&String::from("current")).cloned()
-                }
+                Ok(Command::PatternStop(name)) => match self.precise_patterns.get(&name) {
+                    Some(precise_pattern) => {
+                        let mut clone = precise_pattern.clone();
+                        clone.playing = false;
+                        self.precise_patterns.insert(name, clone);
+                        Ok(())
+                    }
+                    None => Ok(()),
+                },
                 // TODO: handle this command
-                Ok(Command::PatternList(_)) => {
-                    self.precise_patterns.get(&String::from("current")).cloned()
-                }
+                Ok(Command::PatternList(_)) => Ok(()),
                 // Return the current pattern by default
-                Err(PopError::Empty) => {
-                    self.precise_patterns.get(&String::from("current")).cloned()
-                }
+                Err(PopError::Empty) => Ok(()),
             }
         } else {
-            None
+            Ok(()) // Maybe panic here? This should be unreachable.
         }
     }
 
-    fn set_current_pattern(
+    fn start_pattern(
         &mut self,
         context: &mut impl ProcessContext<Self>,
-        pattern: Pattern,
-    ) -> Option<PrecisePattern> {
+        named_pattern: NamedPattern,
+    ) -> Result<(), Box<dyn Error>> {
         let transport = context.transport();
-
         let precise_pattern = PrecisePattern::from(
-            pattern,
+            Pattern {
+                events: named_pattern.events,
+            },
             transport.sample_rate,
             transport.tempo.unwrap_or(120.0),
+            true,
         );
         self.precise_patterns
-            .insert(String::from("current"), precise_pattern.clone());
-
-        nih_log!("set current pattern");
-
-        Some(precise_pattern)
+            .insert(named_pattern.name, precise_pattern.clone());
+        Ok(())
     }
 
     fn start(
@@ -249,23 +292,24 @@ impl Live {
         return ProcessStatus::Normal;
     }
 
-    fn send(&mut self, context: &mut impl ProcessContext<Self>, sev: SimpleNoteEvent) -> () {
-        context.send_event(match sev.note_type {
-            NoteType::On => NoteEvent::NoteOn {
+    fn send(&self, context: &mut impl ProcessContext<Self>, sev: SimpleNoteEvent) -> () {
+        match sev.note_type {
+            NoteType::On => context.send_event(NoteEvent::NoteOn {
                 timing: sev.timing,
                 voice_id: sev.voice_id,
                 channel: sev.channel,
                 note: sev.note,
                 velocity: sev.velocity,
-            },
-            NoteType::Off => NoteEvent::NoteOff {
+            }),
+            NoteType::Off => context.send_event(NoteEvent::NoteOff {
                 timing: sev.timing,
                 voice_id: sev.voice_id,
                 channel: sev.channel,
                 note: sev.note,
                 velocity: 0.0,
-            },
-        })
+            }),
+            NoteType::Rest => {}
+        }
     }
 }
 
@@ -297,7 +341,7 @@ impl Default for LiveParams {
 #[derive(Debug)]
 enum Command {
     PatternList(Vec<String>),
-    PatternStart(Pattern),
+    PatternStart(NamedPattern),
     PatternStop(String),
 }
 
@@ -310,13 +354,29 @@ pub struct Controller {
 #[axum::debug_handler]
 pub async fn start_pattern(
     State(controller): State<Arc<Controller>>,
+    Path(pattern_name): Path<String>,
     Json(pattern): Json<Pattern>,
 ) -> response::Result<String, StatusCode> {
-    // macro does nothing in the http thread
-    // nih_log!("starting pattern {:?}", pattern);
     let mut cmds = controller.commands.lock().unwrap();
     // TODO: handle when the queue is full
-    match cmds.push(Command::PatternStart(pattern)) {
+    let named_pattern = NamedPattern {
+        name: pattern_name,
+        events: pattern.events,
+    };
+    match cmds.push(Command::PatternStart(named_pattern)) {
+        Ok(_) => Ok(String::from("ok")),
+        Err(_err) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+#[axum::debug_handler]
+pub async fn stop_pattern(
+    State(controller): State<Arc<Controller>>,
+    Path(pattern_name): Path<String>,
+) -> response::Result<String, StatusCode> {
+    let mut cmds = controller.commands.lock().unwrap();
+    // TODO: handle when the queue is full
+    match cmds.push(Command::PatternStop(pattern_name)) {
         Ok(_) => Ok(String::from("ok")),
         Err(_err) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
@@ -373,7 +433,8 @@ impl Plugin for Live {
 
         thread::spawn(move || {
             let app = Router::new()
-                .route("/start", post(start_pattern))
+                .route("/start/:pattern_name", post(start_pattern))
+                .route("/stop/:pattern_name", post(stop_pattern))
                 .with_state(commands);
 
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -448,26 +509,26 @@ mod tests {
         let pattern = Pattern {
             events: vec![
                 Event {
-                    note: Note {
+                    action: EventType::NoteEvent(Note {
                         note_num: 60,
                         velocity: 0.8,
                         dur_ms: 20,
-                    },
+                    }),
                     dur_beats: 1.0,
                 },
                 Event {
-                    note: Note {
+                    action: EventType::NoteEvent(Note {
                         note_num: 96,
                         velocity: 0.8,
                         dur_ms: 20,
-                    },
+                    }),
                     dur_beats: 1.0,
                 },
             ],
         };
         let sample_rate = 48000 as f32;
         let tempo = 110 as f64;
-        let precise_pattern = PrecisePattern::from(pattern.clone(), sample_rate, tempo);
+        let precise_pattern = PrecisePattern::from(pattern.clone(), sample_rate, tempo, true);
         let buffer_size_samples = 256 as usize;
         let expectations: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::from([
             (
