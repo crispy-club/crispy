@@ -82,11 +82,6 @@ impl PrecisePattern {
                     velocity: 0.0,
                 }],
             );
-            nih_log!(
-                "added note on event at sample {}, note off event at {}",
-                sample_idx,
-                note_off_timing,
-            );
             sample_idx += ((samples_per_beat as f64) * event.dur_beats) as usize;
         }
         return PrecisePattern {
@@ -96,6 +91,9 @@ impl PrecisePattern {
     }
 
     fn get_events(&self, start: usize, end: usize) -> Vec<SimpleNoteEvent> {
+        if self.length_samples == 0 {
+            return vec![];
+        }
         let adj_start = start % self.length_samples;
         let adj_end = end % self.length_samples;
 
@@ -158,14 +156,29 @@ impl Live {
         let transport = context.transport();
         let pos_samples = transport.pos_samples().unwrap_or(0) as usize;
 
+        // It's feasible that the plugin's internal time could drift from the host's
+        // We aren't really sure exactly how many samples the host considers 1 bar to be!
+        // Maybe we can improve the synchronization of our events with events being played in the host?
+        // Here is a snippet of what the info printed by the log line looks like.
+        //
+        // 12:44:53 [INFO] pos_beats 3.9111111112870276 bar_start_pos_beats 0 bar_number 0
+        // 12:44:53 [INFO] pos_beats 3.9306666664779186 bar_start_pos_beats 0 bar_number 0
+        // 12:44:53 [INFO] pos_beats 3.950222222134471 bar_start_pos_beats 0 bar_number 0
+        // 12:44:53 [INFO] pos_beats 3.9697777777910233 bar_start_pos_beats 0 bar_number 0
+        // 12:44:53 [INFO] pos_beats 3.9893333334475756 bar_start_pos_beats 0 bar_number 0
+        // 12:44:53 [INFO] pos_beats 4.008888889104128 bar_start_pos_beats 4 bar_number 1
+        // 12:44:53 [INFO] pos_beats 4.028444444295019 bar_start_pos_beats 4 bar_number 1
+        // 12:44:53 [INFO] pos_beats 4.047999999951571 bar_start_pos_beats 4 bar_number 1
+        // 12:44:53 [INFO] pos_beats 4.0675555556081235 bar_start_pos_beats 4 bar_number 1
+        // 12:44:53 [INFO] pos_beats 4.087111111264676 bar_start_pos_beats 4 bar_number 1
+        // nih_log!(
+        //     "pos_beats {} bar_start_pos_beats {} bar_number {}",
+        //     transport.pos_beats().unwrap_or(0.0),
+        //     transport.bar_start_pos_beats().unwrap_or(0.0),
+        //     transport.bar_number().unwrap_or(0),
+        // );
         if let Some(precise_pattern) = self.get_current_pattern(context) {
             for event in precise_pattern.get_events(pos_samples, pos_samples + buffer.samples()) {
-                nih_log!(
-                    "playing event {:?} within buffer starting at {} and ending at {}",
-                    event,
-                    pos_samples,
-                    pos_samples + buffer.samples()
-                );
                 self.send(context, event);
             }
         }
@@ -211,6 +224,8 @@ impl Live {
         );
         self.precise_patterns
             .insert(String::from("current"), precise_pattern.clone());
+
+        nih_log!("set current pattern");
 
         Some(precise_pattern)
     }
@@ -259,54 +274,6 @@ struct LiveParams {}
 
 impl Default for Live {
     fn default() -> Self {
-        // let mut patterns = HashMap::new();
-
-        // patterns.insert(
-        //     String::from("first"),
-        //     Pattern {
-        //         events: vec![
-        //             Event {
-        //                 note: Note {
-        //                     note_num: 60,
-        //                     velocity: 0.8,
-        //                     dur_ms: 20,
-        //                 },
-        //                 dur_beats: 1.0,
-        //             },
-        //             Event {
-        //                 note: Note {
-        //                     note_num: 96,
-        //                     velocity: 0.8,
-        //                     dur_ms: 20,
-        //                 },
-        //                 dur_beats: 1.0,
-        //             },
-        //         ],
-        //     },
-        // );
-        // patterns.insert(
-        //     String::from("second"),
-        //     Pattern {
-        //         events: vec![
-        //             Event {
-        //                 note: Note {
-        //                     note_num: 60,
-        //                     velocity: 0.8,
-        //                     dur_ms: 20,
-        //                 },
-        //                 dur_beats: 0.5,
-        //             },
-        //             Event {
-        //                 note: Note {
-        //                     note_num: 96,
-        //                     velocity: 0.8,
-        //                     dur_ms: 20,
-        //                 },
-        //                 dur_beats: 0.5,
-        //             },
-        //         ],
-        //     },
-        // );
         Self {
             params: Arc::new(LiveParams::default()),
             playing: false,
@@ -345,7 +312,8 @@ pub async fn start_pattern(
     State(controller): State<Arc<Controller>>,
     Json(pattern): Json<Pattern>,
 ) -> response::Result<String, StatusCode> {
-    nih_log!("starting pattern {:?}", pattern);
+    // macro does nothing in the http thread
+    // nih_log!("starting pattern {:?}", pattern);
     let mut cmds = controller.commands.lock().unwrap();
     // TODO: handle when the queue is full
     match cmds.push(Command::PatternStart(pattern)) {
