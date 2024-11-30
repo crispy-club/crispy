@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
 use axum::{body::Bytes, extract::State, http::StatusCode, response, routing::post, Json, Router};
 use nih_plug::prelude::*;
-use rtrb::{Consumer, Producer, RingBuffer};
+use rtrb::{Consumer, PopError, Producer, RingBuffer};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -42,6 +42,7 @@ struct SimpleNoteEvent {
     velocity: f32,
 }
 
+#[derive(Clone)]
 struct PrecisePattern {
     events: HashMap<usize, Vec<SimpleNoteEvent>>,
     length_samples: usize,
@@ -137,7 +138,6 @@ impl PrecisePattern {
 
 pub struct Live {
     params: Arc<LiveParams>,
-    patterns: HashMap<String, Pattern>,
     playing: bool,
     precise_patterns: HashMap<String, PrecisePattern>,
 
@@ -158,7 +158,7 @@ impl Live {
         let transport = context.transport();
         let pos_samples = transport.pos_samples().unwrap_or(0) as usize;
 
-        if let Some(precise_pattern) = self.get_current_pattern() {
+        if let Some(precise_pattern) = self.get_current_pattern(context) {
             for event in precise_pattern.get_events(pos_samples, pos_samples + buffer.samples()) {
                 nih_log!(
                     "playing event {:?} within buffer starting at {} and ending at {}",
@@ -172,12 +172,47 @@ impl Live {
         ProcessStatus::Normal
     }
 
-    fn get_current_pattern(&mut self) -> Option<&PrecisePattern> {
-        match self.params.pattern.value() {
-            0 => self.precise_patterns.get("first"),
-            1 => self.precise_patterns.get("second"),
-            _ => None,
+    fn get_current_pattern(
+        &mut self,
+        context: &mut impl ProcessContext<Self>,
+    ) -> Option<PrecisePattern> {
+        if let Some(cmds) = self.commands_rx.as_mut() {
+            match cmds.pop() {
+                Ok(Command::PatternStart(pattern)) => self.set_current_pattern(context, pattern),
+                // TODO: handle this command
+                Ok(Command::PatternStop(_)) => {
+                    self.precise_patterns.get(&String::from("current")).cloned()
+                }
+                // TODO: handle this command
+                Ok(Command::PatternList(_)) => {
+                    self.precise_patterns.get(&String::from("current")).cloned()
+                }
+                // Return the current pattern by default
+                Err(PopError::Empty) => {
+                    self.precise_patterns.get(&String::from("current")).cloned()
+                }
+            }
+        } else {
+            None
         }
+    }
+
+    fn set_current_pattern(
+        &mut self,
+        context: &mut impl ProcessContext<Self>,
+        pattern: Pattern,
+    ) -> Option<PrecisePattern> {
+        let transport = context.transport();
+
+        let precise_pattern = PrecisePattern::from(
+            pattern,
+            transport.sample_rate,
+            transport.tempo.unwrap_or(120.0),
+        );
+        self.precise_patterns
+            .insert(String::from("current"), precise_pattern.clone());
+
+        Some(precise_pattern)
     }
 
     fn start(
@@ -187,14 +222,6 @@ impl Live {
     ) -> ProcessStatus {
         let transport = context.transport();
 
-        for (name, pattern) in self.patterns.clone().into_iter() {
-            let precise_pattern = PrecisePattern::from(
-                pattern,
-                transport.sample_rate,
-                transport.tempo.unwrap_or(120.0),
-            );
-            self.precise_patterns.insert(name.clone(), precise_pattern);
-        }
         self.playing = true;
 
         nih_log!(
@@ -228,65 +255,61 @@ impl Live {
 }
 
 #[derive(Params)]
-struct LiveParams {
-    #[id = "pattern"]
-    pub pattern: IntParam,
-}
+struct LiveParams {}
 
 impl Default for Live {
     fn default() -> Self {
-        let mut patterns = HashMap::new();
+        // let mut patterns = HashMap::new();
 
-        patterns.insert(
-            String::from("first"),
-            Pattern {
-                events: vec![
-                    Event {
-                        note: Note {
-                            note_num: 60,
-                            velocity: 0.8,
-                            dur_ms: 20,
-                        },
-                        dur_beats: 1.0,
-                    },
-                    Event {
-                        note: Note {
-                            note_num: 96,
-                            velocity: 0.8,
-                            dur_ms: 20,
-                        },
-                        dur_beats: 1.0,
-                    },
-                ],
-            },
-        );
-        patterns.insert(
-            String::from("second"),
-            Pattern {
-                events: vec![
-                    Event {
-                        note: Note {
-                            note_num: 60,
-                            velocity: 0.8,
-                            dur_ms: 20,
-                        },
-                        dur_beats: 0.5,
-                    },
-                    Event {
-                        note: Note {
-                            note_num: 96,
-                            velocity: 0.8,
-                            dur_ms: 20,
-                        },
-                        dur_beats: 0.5,
-                    },
-                ],
-            },
-        );
+        // patterns.insert(
+        //     String::from("first"),
+        //     Pattern {
+        //         events: vec![
+        //             Event {
+        //                 note: Note {
+        //                     note_num: 60,
+        //                     velocity: 0.8,
+        //                     dur_ms: 20,
+        //                 },
+        //                 dur_beats: 1.0,
+        //             },
+        //             Event {
+        //                 note: Note {
+        //                     note_num: 96,
+        //                     velocity: 0.8,
+        //                     dur_ms: 20,
+        //                 },
+        //                 dur_beats: 1.0,
+        //             },
+        //         ],
+        //     },
+        // );
+        // patterns.insert(
+        //     String::from("second"),
+        //     Pattern {
+        //         events: vec![
+        //             Event {
+        //                 note: Note {
+        //                     note_num: 60,
+        //                     velocity: 0.8,
+        //                     dur_ms: 20,
+        //                 },
+        //                 dur_beats: 0.5,
+        //             },
+        //             Event {
+        //                 note: Note {
+        //                     note_num: 96,
+        //                     velocity: 0.8,
+        //                     dur_ms: 20,
+        //                 },
+        //                 dur_beats: 0.5,
+        //             },
+        //         ],
+        //     },
+        // );
         Self {
             params: Arc::new(LiveParams::default()),
             playing: false,
-            patterns: patterns,
             // We need the tempo and sample rate to properly initialize this.
             // Will be done on the first process() call.
             precise_patterns: HashMap::new(),
@@ -299,13 +322,12 @@ impl Default for Live {
 
 impl Default for LiveParams {
     fn default() -> Self {
-        Self {
-            pattern: IntParam::new("Pattern", 0, IntRange::Linear { min: 0, max: 1 }),
-        }
+        Self {}
     }
 }
 
 #[allow(dead_code)]
+#[derive(Debug)]
 enum Command {
     PatternList(Vec<String>),
     PatternStart(Pattern),
