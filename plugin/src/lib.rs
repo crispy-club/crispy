@@ -1,21 +1,27 @@
+#[allow(unused_imports)]
+use axum::{body::Bytes, extract::State, http::StatusCode, response, routing::post, Json, Router};
 use nih_plug::prelude::*;
+use rtrb::{Consumer, Producer, RingBuffer};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use tokio::sync::oneshot;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Note {
     note_num: u8,
     dur_ms: i64,
     velocity: f32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Event {
     note: Note,
     dur_beats: f64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Pattern {
     events: Vec<Event>,
 }
@@ -129,14 +135,21 @@ impl PrecisePattern {
     }
 }
 
-pub struct WasmSeq {
-    params: Arc<WasmSeqParams>,
+pub struct Live {
+    params: Arc<LiveParams>,
     patterns: HashMap<String, Pattern>,
     playing: bool,
     precise_patterns: HashMap<String, PrecisePattern>,
+
+    // Plugin thread and command thread will communicate using these.
+    commands_rx: Option<Consumer<Command>>,
+    responses_tx: Option<Producer<Command>>,
+
+    // Command thread will be shutdown by the plugin thread using this.
+    shutdown_tx: Option<oneshot::Sender<()>>,
 }
 
-impl WasmSeq {
+impl Live {
     fn play(
         &mut self,
         buffer: &mut Buffer,
@@ -185,7 +198,7 @@ impl WasmSeq {
         self.playing = true;
 
         nih_log!(
-            "starting wasm seq (sample rate {}) (tempo {})",
+            "starting live (sample rate {}) (tempo {})",
             transport.sample_rate,
             transport.tempo.unwrap_or(120.0),
         );
@@ -215,14 +228,15 @@ impl WasmSeq {
 }
 
 #[derive(Params)]
-struct WasmSeqParams {
+struct LiveParams {
     #[id = "pattern"]
     pub pattern: IntParam,
 }
 
-impl Default for WasmSeq {
+impl Default for Live {
     fn default() -> Self {
         let mut patterns = HashMap::new();
+
         patterns.insert(
             String::from("first"),
             Pattern {
@@ -270,17 +284,20 @@ impl Default for WasmSeq {
             },
         );
         Self {
-            params: Arc::new(WasmSeqParams::default()),
+            params: Arc::new(LiveParams::default()),
             playing: false,
             patterns: patterns,
             // We need the tempo and sample rate to properly initialize this.
             // Will be done on the first process() call.
             precise_patterns: HashMap::new(),
+            commands_rx: None,
+            responses_tx: None,
+            shutdown_tx: None,
         }
     }
 }
 
-impl Default for WasmSeqParams {
+impl Default for LiveParams {
     fn default() -> Self {
         Self {
             pattern: IntParam::new("Pattern", 0, IntRange::Linear { min: 0, max: 1 }),
@@ -288,8 +305,35 @@ impl Default for WasmSeqParams {
     }
 }
 
-impl Plugin for WasmSeq {
-    const NAME: &'static str = "WASM Seq";
+#[allow(dead_code)]
+enum Command {
+    PatternList(Vec<String>),
+    PatternStart(Pattern),
+    PatternStop(String),
+}
+
+#[allow(dead_code)]
+pub struct Controller {
+    commands: Mutex<Producer<Command>>,
+    responses: Mutex<Consumer<Command>>,
+}
+
+#[axum::debug_handler]
+pub async fn start_pattern(
+    State(controller): State<Arc<Controller>>,
+    Json(pattern): Json<Pattern>,
+) -> response::Result<String, StatusCode> {
+    nih_log!("starting pattern {:?}", pattern);
+    let mut cmds = controller.commands.lock().unwrap();
+    // TODO: handle when the queue is full
+    match cmds.push(Command::PatternStart(pattern)) {
+        Ok(_) => Ok(String::from("ok")),
+        Err(_err) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+impl Plugin for Live {
+    const NAME: &'static str = "Live";
     const VENDOR: &'static str = "Brian Sorahan";
     const URL: &'static str = "https://youtu.be/dQw4w9WgXcQ";
     const EMAIL: &'static str = "info@example.com";
@@ -320,6 +364,46 @@ impl Plugin for WasmSeq {
         self.params.clone()
     }
 
+    fn initialize(
+        &mut self,
+        _audio_io_layout: &AudioIOLayout,
+        _buffer_config: &BufferConfig,
+        _context: &mut impl InitContext<Self>,
+    ) -> bool {
+        let (commands_tx, commands_rx) = RingBuffer::<Command>::new(16); // Arbitrary buffer size
+        let (responses_tx, responses_rx) = RingBuffer::<Command>::new(16); // Arbitrary buffer size
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let commands = Arc::new(Controller {
+            commands: Mutex::new(commands_tx),
+            responses: Mutex::new(responses_rx),
+        });
+        self.shutdown_tx = Some(shutdown_tx);
+        self.commands_rx = Some(commands_rx);
+        self.responses_tx = Some(responses_tx);
+
+        thread::spawn(move || {
+            let app = Router::new()
+                .route("/start", post(start_pattern))
+                .with_state(commands);
+
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+
+            rt.block_on(async move {
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+                    .await
+                    .unwrap();
+                axum::serve(listener, app)
+                    .with_graceful_shutdown(async move { shutdown_rx.await.ok().unwrap() })
+                    .await
+                    .unwrap();
+            });
+        });
+        true
+    }
+
     fn process(
         &mut self,
         buffer: &mut Buffer,
@@ -341,25 +425,28 @@ impl Plugin for WasmSeq {
     }
 
     fn deactivate(&mut self) -> () {
+        if let Some(sender) = self.shutdown_tx.take() {
+            sender.send(()).expect("Failed to send shutdown signal");
+        }
         nih_log!("deactivating...");
     }
 }
 
-impl ClapPlugin for WasmSeq {
-    const CLAP_ID: &'static str = "net.sorahan.brian.wasmseq";
+impl ClapPlugin for Live {
+    const CLAP_ID: &'static str = "net.sorahan.brian.live";
     const CLAP_DESCRIPTION: Option<&'static str> = Some("Trigger a midi note every beat");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[ClapFeature::NoteEffect, ClapFeature::Utility];
 }
 
-impl Vst3Plugin for WasmSeq {
+impl Vst3Plugin for Live {
     const VST3_CLASS_ID: [u8; 16] = *b"XXXXXXXXXXXXXXXX";
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[Vst3SubCategory::Tools];
 }
 
-nih_export_clap!(WasmSeq);
-nih_export_vst3!(WasmSeq);
+nih_export_clap!(Live);
+nih_export_vst3!(Live);
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,5 @@
 [package]
-name = "wasmseq"
+name = "live"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.80"
@@ -8,12 +8,12 @@ license = "ISC"
 
 keywords = ["midi", "plugin", "livecoding", "algorave"]
 description = "A sample-accurate livecoding MIDI event sequencer"
-repository = "https://github.com/briansorahan/wasmseq"
+repository = "https://github.com/briansorahan/live"
 
 [workspace]
 members = [
   "xtask",
-  "wasm_seq",
+  "plugin",
 ]
 
 [dependencies]
