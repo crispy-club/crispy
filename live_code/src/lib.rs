@@ -333,7 +333,7 @@ pub async fn start_pattern(
 }
 
 impl Plugin for Live {
-    const NAME: &'static str = "Live";
+    const NAME: &'static str = "LiveCode";
     const VENDOR: &'static str = "Brian Sorahan";
     const URL: &'static str = "https://youtu.be/dQw4w9WgXcQ";
     const EMAIL: &'static str = "info@example.com";
