@@ -1,7 +1,8 @@
 import sys
 
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
+import click
 import jsonplus
 import requests
 
@@ -10,64 +11,144 @@ jsonplus.prefer_compat()
 
 
 NOTES = {
-    "c1": 36,
-    "d1": 38,
-    "e1": 40,
-    "f1": 41,
+    f"{base_note}{octave}": (octave * 12) + note_idx + 24
+    for (note_idx, base_note) in enumerate(
+        ("c", "c#", "d", "d#", "e", "f", "f#", "g", "g#", "a", "a#", "b")
+    )
+    for octave in range(8)
 }
 
 
 class Note(NamedTuple):
-    note_num: int
-    velocity: float
-    dur_ms: int
+    class Event(NamedTuple):
+        note_num: int
+        velocity: float
+        dur_ms: int
+
+    NoteEvent: Event
 
 
 class Event(NamedTuple):
-    note: Note
+    action: str | Note
     dur_beats: float
 
 
 class Pattern(NamedTuple):
     events: list[Event]
+    name: str
+
+    @classmethod
+    def parse(cls, spec: str) -> "Pattern":
+        return _parse(spec)
+
+    def __add__(self, other: "Pattern") -> "Pattern":
+        return Pattern(name=name, events=self.events + other.events)
+
+    def start(self) -> None:
+        data = jsonplus.dumps({"events": self.events})
+        resp = requests.post(
+            f"http://127.0.0.1:3000/start/{self.name}",
+            headers={"Content-Type": "application/json"},
+            data=data,
+        )
+        resp.raise_for_status()
+
+    def stop(self) -> None:
+        resp = requests.post(f"http://127.0.0.1:3000/stop/{self.name}")
+        resp.raise_for_status()
 
 
-def _post(url: str, pattern: Pattern) -> None:
-    data = jsonplus.dumps(pattern)
-    resp = requests.post(url, headers={"Content-Type": "application/json"}, data=data)
-    resp.raise_for_status()
+class Scene(NamedTuple):
+    patterns: dict[str, Pattern]
+
+    @classmethod
+    def parse(cls, spec: str) -> "Scene":
+        return cls(
+            patterns={
+                pattern.name: pattern
+                for pattern in map(
+                    lambda ln: Pattern.parse(ln),
+                    filter(
+                        lambda ln: len(ln) > 0,
+                        map(lambda ln: ln.strip(), spec.split("\n")),
+                    ),
+                )
+            }
+        )
+
+    def start(self) -> None:
+        for _, pattern in self.patterns.items():
+            pattern.start()
+
+    def stop(self) -> None:
+        for _, pattern in self.patterns.items():
+            pattern.stop()
 
 
-def _parse_event(word: str) -> Event | None:
-    parts = word.split(":")
-    assert len(parts) > 0
-    note_num = NOTES[parts[0]]
-    dur_beats = float(parts[1]) if len(parts) > 1 else 1.0
-    return Event(
-        note=Note(
-            note_num=note_num,
-            velocity=0.8,
-            dur_ms=20,
-        ),
-        dur_beats=dur_beats,
+def _parse_event(word: str, note_num: int) -> Event | None:
+    if word == ".":
+        return Event(action="Rest", dur_beats=0.25)
+    elif word == "X":
+        return Event(
+            action=Note(
+                NoteEvent=Note.Event(
+                    note_num=note_num,
+                    velocity=0.9,
+                    dur_ms=20,
+                ),
+            ),
+            dur_beats=0.25,
+        )
+    elif word == "x":
+        return Event(
+            action=Note(
+                NoteEvent=Note.Event(
+                    note_num=note_num,
+                    velocity=0.4,
+                    dur_ms=20,
+                ),
+            ),
+            dur_beats=0.25,
+        )
+    else:
+        raise ValueError(f"unsupported notation: {word}")
+
+
+def _parse(line: str) -> Pattern:
+    note_str, events_str = line.strip().split("=")
+    note_num = NOTES[note_str.strip()]
+    if len(events_str.strip()) == 0:
+        return []
+    return Pattern(
+        name=note_str.strip(),
+        events=[
+            _parse_event(char, note_num)
+            for char in events_str.strip()
+            if not char.isspace()
+        ],
     )
 
 
-def _parse(line: str) -> list[Event]:
-    if len(line.strip()) == 0:
-        return []
-    return [_parse_event(word) for word in line.strip().split()]
+@click.group
+def cli() -> None:
+    pass
 
 
-def main() -> None:
-    events: list[Event] = []
+@cli.command()
+def stop() -> None:
+    for pattern_name in NOTES:
+        pattern = Pattern(name=pattern_name, events=[])
+        pattern.stop()
+
+
+@cli.command()
+def start() -> None:
     for line in map(lambda ln: ln.strip(), sys.stdin):
-        ln_events = _parse(line)
-        if len(ln_events) == 0:
+        pattern = _parse(line)
+        if len(pattern.events) == 0:
             continue
-        events += ln_events
-    _post("http://127.0.0.1:3000/start", Pattern(events=events))
+        pattern.start()
 
 
 if __name__ == "__main__":
-    main()
+    cli()

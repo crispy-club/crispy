@@ -173,6 +173,7 @@ impl PrecisePattern {
 pub struct Live {
     params: Arc<LiveParams>,
     playing: bool,
+    patterns: HashMap<String, Pattern>,
     precise_patterns: HashMap<String, PrecisePattern>,
 
     // Plugin thread and command thread will communicate using these.
@@ -181,6 +182,8 @@ pub struct Live {
 
     // Command thread will be shutdown by the plugin thread using this.
     shutdown_tx: Option<oneshot::Sender<()>>,
+
+    tempo_prev_cycle: Option<f64>,
 }
 
 impl Live {
@@ -192,29 +195,15 @@ impl Live {
         let transport = context.transport();
         let pos_samples = transport.pos_samples().unwrap_or(0) as usize;
 
-        // It's feasible that the plugin's internal time could drift from the host's
-        // We aren't really sure exactly how many samples the host considers 1 bar to be!
-        // Maybe we can improve the synchronization of our events with events being played in the host?
-        // Here is a snippet of what the info printed by the log line looks like.
-        //
-        // 12:44:53 [INFO] pos_beats 3.9111111112870276 bar_start_pos_beats 0 bar_number 0
-        // 12:44:53 [INFO] pos_beats 3.9306666664779186 bar_start_pos_beats 0 bar_number 0
-        // 12:44:53 [INFO] pos_beats 3.950222222134471 bar_start_pos_beats 0 bar_number 0
-        // 12:44:53 [INFO] pos_beats 3.9697777777910233 bar_start_pos_beats 0 bar_number 0
-        // 12:44:53 [INFO] pos_beats 3.9893333334475756 bar_start_pos_beats 0 bar_number 0
-        // 12:44:53 [INFO] pos_beats 4.008888889104128 bar_start_pos_beats 4 bar_number 1
-        // 12:44:53 [INFO] pos_beats 4.028444444295019 bar_start_pos_beats 4 bar_number 1
-        // 12:44:53 [INFO] pos_beats 4.047999999951571 bar_start_pos_beats 4 bar_number 1
-        // 12:44:53 [INFO] pos_beats 4.0675555556081235 bar_start_pos_beats 4 bar_number 1
-        // 12:44:53 [INFO] pos_beats 4.087111111264676 bar_start_pos_beats 4 bar_number 1
-        // nih_log!(
-        //     "pos_beats {} bar_start_pos_beats {} bar_number {}",
-        //     transport.pos_beats().unwrap_or(0.0),
-        //     transport.bar_start_pos_beats().unwrap_or(0.0),
-        //     transport.bar_number().unwrap_or(0),
-        // );
         if let Err(_) = self.process_commands(context) {
             return ProcessStatus::Error("error processing commands");
+        }
+        let transport = context.transport();
+        let tempo = transport.tempo.unwrap_or(120.0);
+
+        if tempo != self.tempo_prev_cycle.unwrap_or(120.0) {
+            nih_log!("recomputing patterns after tempo change");
+            self.recompute_patterns(context);
         }
         for precise_pattern in self.precise_patterns.values() {
             if !precise_pattern.playing {
@@ -227,6 +216,25 @@ impl Live {
         ProcessStatus::Normal
     }
 
+    fn recompute_patterns(&mut self, context: &mut impl ProcessContext<Self>) {
+        let transport = context.transport();
+
+        for (name, pattern) in self.patterns.iter() {
+            let mut playing = false;
+            if let Some(existing_pattern) = self.precise_patterns.get(name) {
+                playing = existing_pattern.playing;
+            }
+            let precise_pattern = PrecisePattern::from(
+                pattern.clone(),
+                transport.sample_rate,
+                transport.tempo.unwrap_or(120.0),
+                playing,
+            );
+            self.precise_patterns
+                .insert(name.clone(), precise_pattern.clone());
+        }
+    }
+
     fn process_commands(
         &mut self,
         context: &mut impl ProcessContext<Self>,
@@ -234,19 +242,24 @@ impl Live {
         if let Some(cmds) = self.commands_rx.as_mut() {
             match cmds.pop() {
                 Ok(Command::PatternStart(pattern)) => self.start_pattern(context, pattern),
-                // TODO: handle this command
-                Ok(Command::PatternStop(name)) => match self.precise_patterns.get(&name) {
-                    Some(precise_pattern) => {
-                        let mut clone = precise_pattern.clone();
-                        clone.playing = false;
-                        self.precise_patterns.insert(name, clone);
-                        Ok(())
+                Ok(Command::PatternStop(name)) => {
+                    nih_log!("stopping pattern");
+                    match self.precise_patterns.get(&name) {
+                        Some(precise_pattern) => {
+                            let mut clone = precise_pattern.clone();
+                            clone.playing = false;
+                            self.precise_patterns.insert(name.clone(), clone);
+                            nih_log!("stopped pattern {}", name.clone());
+                            Ok(())
+                        }
+                        None => {
+                            nih_log!("no pattern with name {}", name);
+                            Ok(())
+                        }
                     }
-                    None => Ok(()),
-                },
+                }
                 // TODO: handle this command
                 Ok(Command::PatternList(_)) => Ok(()),
-                // Return the current pattern by default
                 Err(PopError::Empty) => Ok(()),
             }
         } else {
@@ -262,14 +275,20 @@ impl Live {
         let transport = context.transport();
         let precise_pattern = PrecisePattern::from(
             Pattern {
-                events: named_pattern.events,
+                events: named_pattern.events.clone(),
             },
             transport.sample_rate,
             transport.tempo.unwrap_or(120.0),
             true,
         );
+        self.patterns.insert(
+            named_pattern.name.clone(),
+            Pattern {
+                events: named_pattern.events.clone(),
+            },
+        );
         self.precise_patterns
-            .insert(named_pattern.name, precise_pattern.clone());
+            .insert(named_pattern.name.clone(), precise_pattern.clone());
         Ok(())
     }
 
@@ -323,10 +342,12 @@ impl Default for Live {
             playing: false,
             // We need the tempo and sample rate to properly initialize this.
             // Will be done on the first process() call.
+            patterns: HashMap::new(),
             precise_patterns: HashMap::new(),
             commands_rx: None,
             responses_tx: None,
             shutdown_tx: None,
+            tempo_prev_cycle: None,
         }
     }
 }
@@ -420,8 +441,8 @@ impl Plugin for Live {
         _buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
-        let (commands_tx, commands_rx) = RingBuffer::<Command>::new(16); // Arbitrary buffer size
-        let (responses_tx, responses_rx) = RingBuffer::<Command>::new(16); // Arbitrary buffer size
+        let (commands_tx, commands_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
+        let (responses_tx, responses_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let commands = Arc::new(Controller {
             commands: Mutex::new(commands_tx),
@@ -462,6 +483,7 @@ impl Plugin for Live {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         let transport = context.transport();
+        let tempo = Some(transport.tempo.unwrap_or(120.0));
 
         if transport.playing {
             if !self.playing {
@@ -472,6 +494,8 @@ impl Plugin for Live {
         } else {
             self.playing = false;
         }
+        self.tempo_prev_cycle = tempo;
+
         ProcessStatus::Normal
     }
 
