@@ -4,6 +4,7 @@ use axum::{
     Router,
 };
 use nih_plug::prelude::*;
+use num::integer::lcm;
 use rtrb::{Consumer, PopError, Producer, RingBuffer};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -26,20 +27,55 @@ pub enum EventType {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub struct FractionalDuration {
+    num: i64,
+    den: i64,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Event {
     action: EventType,
-    dur_beats: f64,
+    dur_frac: FractionalDuration,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Pattern {
     events: Vec<Event>,
+    length_bars: Option<FractionalDuration>,
+}
+
+impl Pattern {
+    fn compute_events_lcm(&mut self) -> i64 {
+        let least_common_multiple = self
+            .events
+            .clone()
+            .into_iter()
+            .map(|event| event.dur_frac.den)
+            .reduce(|acc, e| lcm(acc, e))
+            .unwrap();
+        self.events = self
+            .events
+            .clone()
+            .into_iter()
+            .map(|event| {
+                let mut clone = event.clone();
+                let multiplier = least_common_multiple / event.dur_frac.den;
+                clone.dur_frac = FractionalDuration {
+                    num: event.dur_frac.num * multiplier,
+                    den: least_common_multiple,
+                };
+                clone
+            })
+            .collect();
+        least_common_multiple
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NamedPattern {
-    name: String,
     events: Vec<Event>,
+    length_bars: Option<FractionalDuration>,
+    name: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -66,14 +102,36 @@ struct PrecisePattern {
     playing: bool,
 }
 
+fn compute_extra_samples(samples_remainder: i64, num_events: usize) -> Vec<i64> {
+    let samps_per_event = samples_remainder / (num_events as i64);
+    let mut remainder = samples_remainder % (num_events as i64);
+    let mut extra_samples = vec![samps_per_event; num_events];
+    for idx in 0..num_events {
+        if remainder > 0 {
+            extra_samples[idx] = samps_per_event + 1;
+        } else {
+            extra_samples[idx] = samps_per_event;
+        }
+        remainder -= 1;
+    }
+    extra_samples
+}
+
 impl PrecisePattern {
-    fn from(pattern: Pattern, sample_rate: f32, tempo: f64, playing: bool) -> PrecisePattern {
-        let samples_per_beat = (sample_rate as f64 * (60.0 / tempo)) as usize;
+    fn from(pattern: &mut Pattern, sample_rate: f32, tempo: f64, playing: bool) -> PrecisePattern {
+        let least_common_multiple = pattern.compute_events_lcm();
+        let samples_per_bar = (sample_rate as f64 * (240.0 / tempo)) as i64;
+        let pattern_length_samples =
+            (pattern.length_bars.unwrap().num * samples_per_bar) / pattern.length_bars.unwrap().den;
+        let tick_length_samples = pattern_length_samples / least_common_multiple;
+        let samples_remainder = pattern_length_samples % least_common_multiple;
+        let extra_samples = compute_extra_samples(samples_remainder, pattern.events.len());
+
         let samples_per_milli = sample_rate / 1000.0;
         let mut sample_idx: usize = 0;
         let mut events_map: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::new();
 
-        for event in pattern.events {
+        for (idx, event) in pattern.events.clone().into_iter().enumerate() {
             match event.action {
                 EventType::NoteEvent(note) => {
                     events_map.insert(
@@ -117,7 +175,8 @@ impl PrecisePattern {
                     );
                 }
             }
-            sample_idx += ((samples_per_beat as f64) * event.dur_beats) as usize;
+            sample_idx +=
+                ((tick_length_samples * event.dur_frac.num) + extra_samples[idx]) as usize;
         }
         return PrecisePattern {
             events: events_map,
@@ -225,7 +284,7 @@ impl Live {
                 playing = existing_pattern.playing;
             }
             let precise_pattern = PrecisePattern::from(
-                pattern.clone(),
+                &mut pattern.clone(),
                 transport.sample_rate,
                 transport.tempo.unwrap_or(120.0),
                 playing,
@@ -274,7 +333,8 @@ impl Live {
     ) -> Result<(), Box<dyn Error>> {
         let transport = context.transport();
         let precise_pattern = PrecisePattern::from(
-            Pattern {
+            &mut Pattern {
+                length_bars: named_pattern.length_bars.clone(),
                 events: named_pattern.events.clone(),
             },
             transport.sample_rate,
@@ -284,6 +344,7 @@ impl Live {
         self.patterns.insert(
             named_pattern.name.clone(),
             Pattern {
+                length_bars: named_pattern.length_bars.clone(),
                 events: named_pattern.events.clone(),
             },
         );
@@ -383,6 +444,7 @@ pub async fn start_pattern(
     let named_pattern = NamedPattern {
         name: pattern_name,
         events: pattern.events,
+        length_bars: pattern.length_bars,
     };
     match cmds.push(Command::PatternStart(named_pattern)) {
         Ok(_) => Ok(String::from("ok")),
@@ -529,8 +591,16 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
+    fn test_compute_extra_samples() -> Result<(), String> {
+        let extra_samples = compute_extra_samples(37, 5);
+        assert_eq!(extra_samples, vec![8, 8, 7, 7, 7]);
+        Ok(())
+    }
+
+    #[test]
     fn test_precise_pattern() -> Result<(), String> {
         let pattern = Pattern {
+            length_bars: Some(FractionalDuration { num: 1, den: 2 }),
             events: vec![
                 Event {
                     action: EventType::NoteEvent(Note {
@@ -538,7 +608,7 @@ mod tests {
                         velocity: 0.8,
                         dur_ms: 20,
                     }),
-                    dur_beats: 1.0,
+                    dur_frac: FractionalDuration { num: 1, den: 2 },
                 },
                 Event {
                     action: EventType::NoteEvent(Note {
@@ -546,13 +616,13 @@ mod tests {
                         velocity: 0.8,
                         dur_ms: 20,
                     }),
-                    dur_beats: 1.0,
+                    dur_frac: FractionalDuration { num: 1, den: 2 },
                 },
             ],
         };
         let sample_rate = 48000 as f32;
         let tempo = 110 as f64;
-        let precise_pattern = PrecisePattern::from(pattern.clone(), sample_rate, tempo, true);
+        let precise_pattern = PrecisePattern::from(&mut pattern.clone(), sample_rate, tempo, true);
         let buffer_size_samples = 256 as usize;
         let expectations: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::from([
             (
@@ -581,7 +651,7 @@ mod tests {
                 102,
                 vec![SimpleNoteEvent {
                     note_type: NoteType::On,
-                    timing: 69,
+                    timing: 70,
                     voice_id: None,
                     channel: 1,
                     note: 96,
@@ -592,7 +662,7 @@ mod tests {
                 106,
                 vec![SimpleNoteEvent {
                     note_type: NoteType::Off,
-                    timing: 5,
+                    timing: 6,
                     voice_id: None,
                     channel: 1,
                     note: 96,
@@ -603,7 +673,7 @@ mod tests {
                 204,
                 vec![SimpleNoteEvent {
                     note_type: NoteType::On,
-                    timing: 138,
+                    timing: 139,
                     voice_id: None,
                     channel: 1,
                     note: 60,

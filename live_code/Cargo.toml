@@ -14,6 +14,7 @@ repository = "https://github.com/briansorahan/live"
 axum = { version = "0.7.9", features = ["json", "macros", "tokio"] }
 axum-macros = "0.4.2"
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs"] }
+num = "0.4.3"
 rtrb = "0.3.1"
 serde = "1.0.215"
 tokio = "1.41.1"
