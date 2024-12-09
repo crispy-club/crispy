@@ -28,9 +28,14 @@ class Note(NamedTuple):
     NoteEvent: Event
 
 
+class FractionalDuration(NamedTuple):
+    num: int
+    den: int
+
+
 class Event(NamedTuple):
     action: str | Note
-    dur_beats: float
+    dur_frac: FractionalDuration
 
 
 class Pattern(NamedTuple):
@@ -87,7 +92,7 @@ class Scene(NamedTuple):
 
 def _parse_event(word: str, note_num: int) -> Event | None:
     if word == ".":
-        return Event(action="Rest", dur_beats=0.25)
+        return Event(action="Rest", dur_frac=FractionalDuration(num=1, den=16))
     elif word == "X":
         return Event(
             action=Note(
@@ -97,7 +102,7 @@ def _parse_event(word: str, note_num: int) -> Event | None:
                     dur_ms=20,
                 ),
             ),
-            dur_beats=0.25,
+            dur_frac=FractionalDuration(num=1, den=16),
         )
     elif word == "x":
         return Event(
@@ -108,7 +113,7 @@ def _parse_event(word: str, note_num: int) -> Event | None:
                     dur_ms=20,
                 ),
             ),
-            dur_beats=0.25,
+            dur_frac=FractionalDuration(num=1, den=16),
         )
     else:
         raise ValueError(f"unsupported notation: {word}")

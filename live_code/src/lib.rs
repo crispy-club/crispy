@@ -332,9 +332,12 @@ impl Live {
         named_pattern: NamedPattern,
     ) -> Result<(), Box<dyn Error>> {
         let transport = context.transport();
+        let pattern_length = named_pattern
+            .length_bars
+            .or(Some(FractionalDuration { num: 1, den: 1 }));
         let precise_pattern = PrecisePattern::from(
             &mut Pattern {
-                length_bars: named_pattern.length_bars.clone(),
+                length_bars: pattern_length,
                 events: named_pattern.events.clone(),
             },
             transport.sample_rate,
@@ -344,7 +347,7 @@ impl Live {
         self.patterns.insert(
             named_pattern.name.clone(),
             Pattern {
-                length_bars: named_pattern.length_bars.clone(),
+                length_bars: pattern_length,
                 events: named_pattern.events.clone(),
             },
         );
