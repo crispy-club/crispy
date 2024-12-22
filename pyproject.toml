@@ -1,0 +1,14 @@
+[project]
+name = "live"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1.7",
+    "invoke>=2.2.0",
+    "jsonplus>=0.8.0",
+    "mypy>=1.14.0",
+    "requests>=2.32.3",
+    "ruff>=0.8.2",
+]

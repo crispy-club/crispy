@@ -499,7 +499,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "live_code"
+name = "livecoding"
 version = "0.1.0"
 dependencies = [
  "axum",

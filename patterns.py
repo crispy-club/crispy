@@ -1,6 +1,6 @@
 import sys
 
-from typing import Literal, NamedTuple
+from typing import NamedTuple
 
 import click
 import jsonplus
@@ -47,7 +47,7 @@ class Pattern(NamedTuple):
         return _parse(spec)
 
     def __add__(self, other: "Pattern") -> "Pattern":
-        return Pattern(name=name, events=self.events + other.events)
+        return Pattern(name=self.name, events=self.events + other.events)
 
     def start(self) -> None:
         data = jsonplus.dumps({"events": self.events})

@@ -13,7 +13,7 @@ repository = "https://github.com/briansorahan/live"
 [workspace]
 members = [
   "xtask",
-  "live_code",
+  "livecoding",
 ]
 
 [dependencies]
