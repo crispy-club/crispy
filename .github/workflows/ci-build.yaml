@@ -9,7 +9,7 @@ jobs:
     name: CI Build
     runs-on: ubuntu-latest
     container:
-      image: "python:3.14.1-bookworm"
+      image: "python:3.13.1-bookworm"
     steps:
       - uses: actions/checkout@v2
       - name: Install and build
