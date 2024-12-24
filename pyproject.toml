@@ -1,14 +1,17 @@
 [project]
 name = "live"
 version = "0.1.0"
-description = "Add your description here"
+description = "Python package for improvising music with code"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13.1"
 dependencies = [
     "click>=8.1.7",
     "invoke>=2.2.0",
     "jsonplus>=0.8.0",
+    "lark>=1.2.2",
     "mypy>=1.14.0",
+    "pytest>=8.3.4",
     "requests>=2.32.3",
     "ruff>=0.8.2",
+    "types-requests>=2.32.0.20241016",
 ]
