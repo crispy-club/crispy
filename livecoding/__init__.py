@@ -6,8 +6,8 @@ from .base_types import (
     Rest as Rest,
 )
 from .grammar import (
-    create_pattern_parser as create_pattern_parser,
+    get_pattern_parser as get_pattern_parser,
     lark_ebnf as lark_ebnf,
 )
 from .notes import NoteNumbers as NoteNumbers
-from .pattern import PatternTransformer as PatternTransformer
+from .plugin import note_pattern as note_pattern, play as play, stop as stop

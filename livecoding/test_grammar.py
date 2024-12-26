@@ -1,13 +1,13 @@
 from lark import Token, Tree
 
-from livecoding.grammar import create_pattern_parser
-from livecoding.pattern import PatternTransformer
+from livecoding.grammar import get_pattern_parser
+from livecoding.pattern import _get_transformer
 
 
 def test_pattern_with_just_notes() -> None:
-    parser = create_pattern_parser()
+    parser = get_pattern_parser()
     tree = parser.parse("[c1 d#1 g1 c2]")
-    assert PatternTransformer().transform(tree) == Tree[int](
+    assert _get_transformer().transform(tree) == Tree[int](
         Token("RULE", "pattern"),
         [
             Tree[int](Token("RULE", "event"), [36]),
@@ -19,9 +19,9 @@ def test_pattern_with_just_notes() -> None:
 
 
 def test_pattern_with_notes_and_velocities() -> None:
-    parser = create_pattern_parser()
+    parser = get_pattern_parser()
     tree = parser.parse("[c1,127 d#1,60 g1,50 c2,110]")
-    assert PatternTransformer().transform(tree) == Tree[tuple[int, int]](
+    assert _get_transformer().transform(tree) == Tree[tuple[int, int]](
         Token("RULE", "pattern"),
         [
             Tree[tuple[int, int]](Token("RULE", "event"), [(36, 127)]),
@@ -33,9 +33,9 @@ def test_pattern_with_notes_and_velocities() -> None:
 
 
 def test_nested_pattern_with_just_notes() -> None:
-    parser = create_pattern_parser()
+    parser = get_pattern_parser()
     tree = parser.parse("[c1 [c1 d#1 d1 d#1] g1 c2]")
-    assert PatternTransformer().transform(tree) == Tree[int](
+    assert _get_transformer().transform(tree) == Tree[int](
         Token("RULE", "pattern"),
         [
             Tree(Token("RULE", "event"), [36]),
@@ -60,10 +60,10 @@ def test_nested_pattern_with_just_notes() -> None:
 
 
 def test_nested_pattern_with_notes_and_velocities() -> None:
-    parser = create_pattern_parser()
+    parser = get_pattern_parser()
     tree = parser.parse("[c1 [c1,100 d#1,80 d1,90 d#1] g1,50 c2,70]")
-    print(PatternTransformer().transform(tree))
-    assert PatternTransformer().transform(tree) == Tree(
+    print(_get_transformer().transform(tree))
+    assert _get_transformer().transform(tree) == Tree(
         Token("RULE", "pattern"),
         [
             Tree(Token("RULE", "event"), [36]),

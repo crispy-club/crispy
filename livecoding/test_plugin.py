@@ -1,4 +1,5 @@
-from livecoding.base_types import Duration
+from livecoding.base_types import Duration, Event, Note, Pattern
+from livecoding.plugin import note_pattern
 
 
 def test_livecoding_duration_addition() -> None:
@@ -12,3 +13,30 @@ def test_livecoding_duration_mult() -> None:
 
 def test_livecoding_duration_division() -> None:
     assert Duration(1, 16) / Duration(2, 3) == Duration(3, 32)
+
+
+def test_note_pattern() -> None:
+    pattern = note_pattern("bassline", "[c1 d#1 g1 c2]")
+    print(pattern)
+    assert pattern == Pattern(
+        name="bassline",
+        length_bars=Duration(1, 1),
+        events=[
+            Event(
+                action=Note(note_num=36, velocity=0.8, dur_ms=20),
+                dur_frac=Duration(1, 4),
+            ),
+            Event(
+                action=Note(note_num=39, velocity=0.8, dur_ms=20),
+                dur_frac=Duration(1, 4),
+            ),
+            Event(
+                action=Note(note_num=43, velocity=0.8, dur_ms=20),
+                dur_frac=Duration(1, 4),
+            ),
+            Event(
+                action=Note(note_num=48, velocity=0.8, dur_ms=20),
+                dur_frac=Duration(1, 4),
+            ),
+        ],
+    )

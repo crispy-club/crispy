@@ -1,5 +1,5 @@
 from math import gcd, lcm
-from typing import Literal, NamedTuple
+from typing import Literal, NamedTuple, Union, overload
 
 
 Rest = Literal["Rest"]
@@ -34,7 +34,17 @@ class Duration:
     def __mul__(self, other: "Duration") -> "Duration":
         return Duration(self.num * other.num, self.den * other.den)
 
-    def __truediv__(self, other: "Duration") -> "Duration":
+    @overload
+    def __truediv__(self, other: int) -> "Duration": ...
+
+    @overload
+    def __truediv__(self, other: "Duration") -> "Duration": ...
+
+    def __truediv__(self, other: Union["Duration", int]) -> "Duration":
+        if isinstance(other, int):
+            assert other > 0
+            return self.__mul__(Duration(1, other))
+        assert isinstance(other, Duration)
         return self.__mul__(Duration(other.den, other.num))
 
     def __repr__(self) -> str:
@@ -63,6 +73,17 @@ class Note:
             note_num=note_num,
             velocity=velocity,
             dur_ms=dur_ms,
+        )
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Note):
+            return False
+        return all(
+            [
+                getattr(self.NoteEvent, attr_name)
+                == getattr(other.NoteEvent, attr_name)
+                for attr_name in {"dur_ms", "note_num", "velocity"}
+            ]
         )
 
 

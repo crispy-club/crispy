@@ -42,5 +42,11 @@ def lark_ebnf() -> str:
     """
 
 
-def create_pattern_parser() -> Lark:
-    return Lark(lark_ebnf(), start="pattern")
+_PARSER: Lark | None = None
+
+
+def get_pattern_parser() -> Lark:
+    global _PARSER
+    if _PARSER is None:
+        _PARSER = Lark(lark_ebnf(), start="pattern")
+    return _PARSER

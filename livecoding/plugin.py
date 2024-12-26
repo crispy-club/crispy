@@ -1,33 +1,27 @@
 import jsonplus
 import requests
 
-from livecoding.base_types import Duration, Event, Pattern
+from livecoding.base_types import Duration, Pattern
+from livecoding.grammar import get_pattern_parser
+from livecoding.pattern import _get_pattern, _get_transformer
 
 
 jsonplus.prefer_compat()
 
 
-def _gen_random_name() -> str:
-    return "foo"
-
-
-def _compile(pattern_definition: str) -> list[Event]:
-    return []
-
-
-def pat(
+def note_pattern(
     name: str,
     pattern_definition: str,
     length_bars: Duration = Duration(1, 1),
     default_velocity: float = 0.8,
-    default_duration: Duration = Duration(1, 16),
 ) -> Pattern:
-    if name is None:
-        name = _gen_random_name()
-    return Pattern(
-        length_bars=length_bars,
+    ast = get_pattern_parser().parse(pattern_definition)
+    transformer = _get_transformer()
+    return _get_pattern(
         name=name,
-        events=_compile(pattern_definition),
+        length_bars=length_bars,
+        tree=transformer.transform(ast),  # type: ignore
+        default_velocity=default_velocity,
     )
 
 
