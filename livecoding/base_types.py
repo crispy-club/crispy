@@ -1,10 +1,14 @@
+import json
 from math import gcd, lcm
-from typing import Literal, NamedTuple, Union, overload
+from typing import Literal, Union, overload
+
+from attrs import asdict, define
 
 
 Rest = Literal["Rest"]
 
 
+@define
 class Duration:
     num: int
     den: int
@@ -13,6 +17,9 @@ class Duration:
         assert num > 0 and den > 0
         self.num = num
         self.den = den
+
+    def json(self) -> str:
+        return json.dumps(asdict(self), separators=(",", ":"))
 
     def __add__(self, other: "Duration") -> "Duration":
         lcmult = lcm(self.den, other.den)
@@ -60,20 +67,18 @@ class Duration:
         return Duration(int(self.num / gcdiv), int(self.den / gcdiv))
 
 
+@define
 class Note:
-    class InnerEvent(NamedTuple):
+    @define
+    class Params:
         note_num: int
         velocity: float
         dur_ms: int
 
-    NoteEvent: InnerEvent
+    NoteEvent: Params
 
-    def __init__(self, note_num: int, velocity: float, dur_ms: int) -> None:
-        self.NoteEvent = self.InnerEvent(
-            note_num=note_num,
-            velocity=velocity,
-            dur_ms=dur_ms,
-        )
+    def __init__(self, note_event: Params) -> None:
+        self.NoteEvent = note_event
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Note):
@@ -86,13 +91,24 @@ class Note:
             ]
         )
 
+    def json(self) -> str:
+        return json.dumps(asdict(self), separators=(",", ":"))
 
-class Event(NamedTuple):
+
+@define
+class Event:
     action: Rest | Note
     dur_frac: Duration
 
+    def json(self) -> str:
+        return json.dumps(asdict(self), separators=(",", ":"))
 
-class Pattern(NamedTuple):
+
+@define
+class Pattern:
     events: list[Event]
     length_bars: Duration
     name: str
+
+    def json(self) -> str:
+        return json.dumps(asdict(self), separators=(",", ":"))

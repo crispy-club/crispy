@@ -15,7 +15,7 @@ def test_livecoding_duration_division() -> None:
     assert Duration(1, 16) / Duration(2, 3) == Duration(3, 32)
 
 
-def test_note_pattern() -> None:
+def test_note_pattern_simple() -> None:
     pattern = note_pattern("bassline", "[c1 d#1 g1 c2]")
     print(pattern)
     assert pattern == Pattern(
@@ -23,19 +23,54 @@ def test_note_pattern() -> None:
         length_bars=Duration(1, 1),
         events=[
             Event(
-                action=Note(note_num=36, velocity=0.8, dur_ms=20),
+                action=Note(Note.Params(note_num=36, velocity=0.8, dur_ms=20)),
                 dur_frac=Duration(1, 4),
             ),
             Event(
-                action=Note(note_num=39, velocity=0.8, dur_ms=20),
+                action=Note(Note.Params(note_num=39, velocity=0.8, dur_ms=20)),
                 dur_frac=Duration(1, 4),
             ),
             Event(
-                action=Note(note_num=43, velocity=0.8, dur_ms=20),
+                action=Note(Note.Params(note_num=43, velocity=0.8, dur_ms=20)),
                 dur_frac=Duration(1, 4),
             ),
             Event(
-                action=Note(note_num=48, velocity=0.8, dur_ms=20),
+                action=Note(Note.Params(note_num=48, velocity=0.8, dur_ms=20)),
+                dur_frac=Duration(1, 4),
+            ),
+        ],
+    )
+
+
+def test_note_pattern_nested() -> None:
+    pattern = note_pattern("bassline", "[c1 [d#1 c1 d#1] g1 c2]")
+    print(pattern)
+    assert pattern == Pattern(
+        name="bassline",
+        length_bars=Duration(1, 1),
+        events=[
+            Event(
+                action=Note(Note.Params(note_num=36, velocity=0.8, dur_ms=20)),
+                dur_frac=Duration(1, 4),
+            ),
+            Event(
+                action=Note(Note.Params(note_num=39, velocity=0.8, dur_ms=20)),
+                dur_frac=Duration(1, 12),
+            ),
+            Event(
+                action=Note(Note.Params(note_num=36, velocity=0.8, dur_ms=20)),
+                dur_frac=Duration(1, 12),
+            ),
+            Event(
+                action=Note(Note.Params(note_num=39, velocity=0.8, dur_ms=20)),
+                dur_frac=Duration(1, 12),
+            ),
+            Event(
+                action=Note(Note.Params(note_num=43, velocity=0.8, dur_ms=20)),
+                dur_frac=Duration(1, 4),
+            ),
+            Event(
+                action=Note(Note.Params(note_num=48, velocity=0.8, dur_ms=20)),
                 dur_frac=Duration(1, 4),
             ),
         ],

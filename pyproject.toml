@@ -5,6 +5,7 @@ description = "Python package for improvising music with code"
 readme = "README.md"
 requires-python = ">=3.13.1"
 dependencies = [
+    "attrs>=24.3.0",
     "click>=8.1.7",
     "invoke>=2.2.0",
     "jsonplus>=0.8.0",

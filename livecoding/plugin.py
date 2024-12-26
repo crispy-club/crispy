@@ -1,21 +1,20 @@
-import jsonplus
+import json
+
 import requests
+from attrs import asdict
 
 from livecoding.base_types import Duration, Pattern
 from livecoding.grammar import get_pattern_parser
 from livecoding.pattern import _get_pattern, _get_transformer
 
 
-jsonplus.prefer_compat()
-
-
 def note_pattern(
     name: str,
-    pattern_definition: str,
+    definition: str,
     length_bars: Duration = Duration(1, 1),
     default_velocity: float = 0.8,
 ) -> Pattern:
-    ast = get_pattern_parser().parse(pattern_definition)
+    ast = get_pattern_parser().parse(definition)
     transformer = _get_transformer()
     return _get_pattern(
         name=name,
@@ -31,7 +30,7 @@ def stop(pattern_name: str) -> None:
 
 
 def play(pattern: Pattern) -> None:
-    data = jsonplus.dumps({"events": pattern.events})
+    data = json.dumps({"events": [asdict(ev) for ev in pattern.events]})
     resp = requests.post(
         f"http://127.0.0.1:3000/start/{pattern.name}",
         headers={"Content-Type": "application/json"},

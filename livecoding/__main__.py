@@ -22,18 +22,22 @@ def _parse_event(word: str, note_num: int) -> Event:
     elif word == "X":
         return Event(
             action=Note(
-                note_num=note_num,
-                velocity=0.9,
-                dur_ms=20,
+                Note.Params(
+                    note_num=note_num,
+                    velocity=0.9,
+                    dur_ms=20,
+                ),
             ),
             dur_frac=Duration(num=1, den=16),
         )
     elif word == "x":
         return Event(
             action=Note(
-                note_num=note_num,
-                velocity=0.4,
-                dur_ms=20,
+                Note.Params(
+                    note_num=note_num,
+                    velocity=0.4,
+                    dur_ms=20,
+                ),
             ),
             dur_frac=Duration(num=1, den=16),
         )

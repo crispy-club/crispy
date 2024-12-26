@@ -31,11 +31,19 @@ def _get_events(
         print(f"leaf {child}")
         if isinstance(child, int):
             events.append(
-                Event(action=Note(child, default_velocity, 20), dur_frac=each_dur)
+                Event(
+                    action=Note(Note.Params(child, default_velocity, 20)),
+                    dur_frac=each_dur,
+                )
             )  # Need to be smarter about dur_ms
         elif isinstance(child, tuple):
             assert len(events) == 2
-            events.append(Event(action=Note(child[0], child[1], 20), dur_frac=each_dur))
+            events.append(
+                Event(
+                    action=Note(Note.Params(child[0], child[1], 20)),
+                    dur_frac=each_dur,
+                )
+            )
     return events
 
 
