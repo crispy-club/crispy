@@ -4,16 +4,8 @@ import click
 
 from livecoding.base_types import Duration, Event, Note, Pattern
 from livecoding.grammar import lark_ebnf
+from livecoding.notes import NoteNumbers
 from livecoding.plugin import play, stop
-
-
-NOTES = {
-    f"{base_note}{octave}": (octave * 12) + note_idx + 24
-    for (note_idx, base_note) in enumerate(
-        ("c", "c#", "d", "d#", "e", "f", "f#", "g", "g#", "a", "a#", "b")
-    )
-    for octave in range(8)
-}
 
 
 def _parse_event(word: str, note_num: int) -> Event:
@@ -47,7 +39,7 @@ def _parse_event(word: str, note_num: int) -> Event:
 
 def _parse(line: str) -> Pattern:
     note_str, events_str = line.strip().split("=")
-    note_num = NOTES[note_str.strip()]
+    note_num = NoteNumbers[note_str.strip()]
     if len(events_str.strip()) == 0:
         return Pattern(name="", length_bars=Duration(0, 1), events=[])
     events = [
@@ -74,7 +66,7 @@ def ebnf() -> None:
 
 @cli.command()
 def silence() -> None:
-    for pattern_name in NOTES:
+    for pattern_name in NoteNumbers:
         stop(pattern_name)
 
 
