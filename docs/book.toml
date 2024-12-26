@@ -1,0 +1,6 @@
+[book]
+authors = ["Brian Sorahan"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Live Code"

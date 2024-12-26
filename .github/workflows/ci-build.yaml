@@ -1,0 +1,29 @@
+name: CI Build
+on:
+  push:
+    paths-ignore:
+      - 'README.md'
+  workflow_dispatch:
+jobs:
+  build_python_client:
+    name: Build Python Client
+    runs-on: ubuntu-latest
+    container:
+      image: "python:3.13.1-bookworm"
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install and build
+        run: |
+          pip install uv==0.5.11
+          export PYTHONPATH="$GITHUB_WORKSPACE"
+          uv run invoke build
+  build_plugin:
+    name: Build Plugin
+    runs-on: ubuntu-latest
+    container:
+      image: "rust:1.83.0-bullseye"
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install and build
+        run: |
+          cargo test --package livecoding
