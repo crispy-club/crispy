@@ -82,6 +82,7 @@ def silence(name: str | None, notes: bool) -> None:
         for pattern_name in NoteNumbers:
             stop(pattern_name)
     else:
+        assert name is not None
         stop(name)
 
 
