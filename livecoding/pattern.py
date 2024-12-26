@@ -28,7 +28,6 @@ def _get_events(
         if isinstance(child, Tree):
             events += _get_events(child, default_velocity, each_dur)
             continue
-        print(f"leaf {child}")
         if isinstance(child, int):
             events.append(
                 Event(
@@ -50,7 +49,7 @@ def _get_events(
 # Seems like mypy doesn't care about the second generic type for Transformer.
 # You can change it from int to something else and mypy doesn't complain.
 class _PatternTransformer(Transformer[Token, _LEAF_TYPE]):
-    def rest(self) -> Rest:
+    def rest(self, value: str) -> Rest:
         return "Rest"
 
     def note(self, value: list[str]) -> int:
