@@ -88,3 +88,28 @@ def _get_transformer() -> _PatternTransformer:
     if _TRANSFORMER is None:
         _TRANSFORMER = _PatternTransformer()
     return _TRANSFORMER
+
+
+def rev(pattern: Pattern) -> Pattern:
+    return Pattern(
+        events=list(reversed(pattern.events)),
+        length_bars=pattern.length_bars,
+        name=pattern.name,
+    )
+
+
+def _transpose(amount: int, event: Event) -> Event:
+    if event.action == Rest:
+        return event
+    elif isinstance(event.action, Note):
+        return Event(dur_frac=event.dur_frac, action=event.action.transpose(amount))
+    else:
+        raise ValueError(f"unknown event type: {event}")
+
+
+def transpose(amount: int, pattern: Pattern) -> Pattern:
+    return Pattern(
+        events=list(map(lambda ev: _transpose(amount, ev), pattern.events)),
+        length_bars=pattern.length_bars,
+        name=pattern.name,
+    )

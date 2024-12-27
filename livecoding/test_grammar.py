@@ -62,7 +62,39 @@ def test_nested_pattern_with_just_notes() -> None:
 def test_nested_pattern_with_notes_and_velocities() -> None:
     parser = get_pattern_parser()
     tree = parser.parse("[c1 [c1,100 d#1,80 d1,90 d#1] g1,50 c2,70]")
-    print(_get_transformer().transform(tree))
+    assert _get_transformer().transform(tree) == Tree(
+        Token("RULE", "pattern"),
+        [
+            Tree(Token("RULE", "event"), [36]),
+            Tree(
+                Token("RULE", "event"),
+                [
+                    Tree(
+                        Token("RULE", "pattern"),
+                        [
+                            Tree(Token("RULE", "event"), [(36, 100)]),
+                            Tree(Token("RULE", "event"), [(39, 80)]),
+                            Tree(Token("RULE", "event"), [(38, 90)]),
+                            Tree(Token("RULE", "event"), [39]),
+                        ],
+                    )
+                ],
+            ),
+            Tree(Token("RULE", "event"), [(43, 50)]),
+            Tree(Token("RULE", "event"), [(48, 70)]),
+        ],
+    )
+
+
+def test_nested_pattern_with_notes_and_velocities_and_newlines() -> None:
+    parser = get_pattern_parser()
+    tree = parser.parse("""
+    [
+      c1
+      [c1,100 d#1,80 d1,90 d#1]
+      g1,50
+      c2,70
+    ]""")
     assert _get_transformer().transform(tree) == Tree(
         Token("RULE", "pattern"),
         [

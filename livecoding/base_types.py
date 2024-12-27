@@ -38,8 +38,17 @@ class Duration:
         lsimp, rsimp = self._simplify(), other._simplify()
         return lsimp.num == rsimp.num and lsimp.den == rsimp.den
 
-    def __mul__(self, other: "Duration") -> "Duration":
-        return Duration(self.num * other.num, self.den * other.den)
+    @overload
+    def __mul__(self, other: "Duration") -> "Duration": ...
+
+    @overload
+    def __mul__(self, other: int) -> "Duration": ...
+
+    def __mul__(self, other: Union["Duration", int]) -> "Duration":
+        if isinstance(other, int):
+            return self.__mul__(Duration(other, 1))
+        assert isinstance(other, Duration)
+        return Duration(self.num * other.num, self.den * other.den)._simplify()
 
     @overload
     def __truediv__(self, other: int) -> "Duration": ...
@@ -94,6 +103,15 @@ class Note:
     def json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))
 
+    def transpose(self, amount: int) -> "Note":
+        return Note(
+            self.Params(
+                note_num=(self.NoteEvent.note_num + amount) % 128,
+                velocity=self.NoteEvent.velocity,
+                dur_ms=self.NoteEvent.dur_ms,
+            ),
+        )
+
 
 @define
 class Event:
@@ -109,6 +127,21 @@ class Pattern:
     events: list[Event]
     length_bars: Duration
     name: str
+
+    def __add__(self, other: "Pattern") -> "Pattern":
+        return Pattern(
+            events=self.events + other.events,
+            length_bars=self.length_bars + other.length_bars,
+            name=self.name,
+        )
+
+    def __mul__(self, times: int) -> "Pattern":
+        assert times > 0
+        return Pattern(
+            events=self.events * times,
+            length_bars=self.length_bars * times,
+            name=self.name,
+        )
 
     def json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))
