@@ -3,7 +3,7 @@ import json
 import requests
 from attrs import asdict
 
-from livecoding.base_types import Duration, Pattern
+from livecoding.base_types import Duration, NotePattern
 from livecoding.grammar import get_pattern_parser
 from livecoding.pattern import _get_pattern, _get_transformer
 
@@ -13,7 +13,7 @@ def note_pattern(
     definition: str,
     length_bars: Duration = Duration(1, 1),
     default_velocity: float = 0.8,
-) -> Pattern:
+) -> NotePattern:
     ast = get_pattern_parser().parse(definition)
     transformer = _get_transformer()
     return _get_pattern(
@@ -29,7 +29,7 @@ def stop(pattern_name: str) -> None:
     resp.raise_for_status()
 
 
-def play(pattern: Pattern) -> None:
+def play(pattern: NotePattern) -> None:
     data = json.dumps({"events": [asdict(ev) for ev in pattern.events]})
     resp = requests.post(
         f"http://127.0.0.1:3000/start/{pattern.name}",

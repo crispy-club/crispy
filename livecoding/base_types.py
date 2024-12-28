@@ -161,27 +161,29 @@ class Event:
 
 
 @define
-class Pattern:
+class NotePattern:
     events: list[Event]
     length_bars: Duration
     name: str
 
-    def __add__(self, other: "Pattern") -> "Pattern":
-        return Pattern(
+    def __add__(self, other: "NotePattern") -> "NotePattern":
+        return NotePattern(
             events=self.events + other.events,
             length_bars=self.length_bars + other.length_bars,
             name=self.name,
         )
 
-    def __mul__(self, times: int) -> "Pattern":
+    def __mul__(self, times: int) -> "NotePattern":
         assert times > 0
-        return Pattern(
+        return NotePattern(
             events=self.events * times,
             length_bars=self.length_bars * times,
             name=self.name,
         )
 
-    def __or__(self, pattern_filter: Callable[["Pattern"], "Pattern"]) -> "Pattern":
+    def __or__(
+        self, pattern_filter: Callable[["NotePattern"], "NotePattern"]
+    ) -> "NotePattern":
         return pattern_filter(self)
 
     def json(self) -> str:

@@ -1,10 +1,13 @@
-from livecoding.base_types import Bar, Event, Note, Pattern
-from livecoding.pattern import rev, rot, tran
+import functools
+import operator
+
+from livecoding.base_types import Bar, Duration, Event, Note, NotePattern
+from livecoding.pattern import rev, rot, tran, resize
 from livecoding.plugin import note_pattern
 
 
 def test_empty_pattern() -> None:
-    assert note_pattern("foo", "[]") == Pattern(
+    assert note_pattern("foo", "[]") == NotePattern(
         name="foo",
         length_bars=Bar,
         events=[],
@@ -12,7 +15,7 @@ def test_empty_pattern() -> None:
 
 
 def test_pattern_with_velocity() -> None:
-    assert note_pattern("foo", "[c2,0.8 g2,0.7]") == Pattern(
+    assert note_pattern("foo", "[c2,0.8 g2,0.7]") == NotePattern(
         name="foo",
         length_bars=Bar,
         events=[
@@ -30,8 +33,7 @@ def test_pattern_with_velocity() -> None:
 
 def test_pattern_with_rest() -> None:
     res = note_pattern("foo", "[c2,0.8 .]")
-    print(f">>>>>>>>>>>>>>>>>>> {res}")
-    assert res == Pattern(
+    assert res == NotePattern(
         name="foo",
         length_bars=Bar,
         events=[
@@ -44,6 +46,20 @@ def test_pattern_with_rest() -> None:
                 dur_frac=Bar / 2,
             ),
         ],
+    )
+
+
+def test_add_sequence_of_patterns() -> None:
+    res = functools.reduce(
+        operator.add,
+        [
+            note_pattern("p1", "[c2,0.8]"),
+            note_pattern("p2", "[e2,0.8]"),
+            note_pattern("p3", "[g2,0.8]"),
+        ],
+    )
+    assert res == (
+        note_pattern("p1", "[c2,0.8 e2,0.8 g2,0.8]") | resize(Duration(3, 1))
     )
 
 

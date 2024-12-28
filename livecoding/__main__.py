@@ -3,7 +3,7 @@ import sys
 import click
 from attrs import define
 
-from livecoding.base_types import Duration, Event, Note, Pattern
+from livecoding.base_types import Duration, Event, Note, NotePattern
 from livecoding.grammar import lark_ebnf
 from livecoding.notes import NoteNumbers
 from livecoding.plugin import note_pattern, play, stop
@@ -11,7 +11,7 @@ from livecoding.plugin import note_pattern, play, stop
 
 @define
 class Melody:
-    def parse(self, line: str) -> Pattern:
+    def parse(self, line: str) -> NotePattern:
         name, definition = line.strip().split("=")
         return note_pattern(name.strip(), definition)
 
@@ -46,17 +46,17 @@ class Perc:
         else:
             raise ValueError(f"unsupported notation: {word}")
 
-    def parse(self, line: str) -> Pattern:
+    def parse(self, line: str) -> NotePattern:
         note_str, events_str = line.strip().split("=")
         note_num = NoteNumbers[note_str.strip()]
         if len(events_str.strip()) == 0:
-            return Pattern(name="", length_bars=Duration(0, 1), events=[])
+            return NotePattern(name="", length_bars=Duration(0, 1), events=[])
         events = [
             self.parse_event(char, note_num)
             for char in events_str.strip()
             if not char.isspace()
         ]
-        return Pattern(
+        return NotePattern(
             name=note_str.strip(),
             events=events,
             length_bars=Duration(len(events), 16),

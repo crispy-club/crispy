@@ -1,10 +1,9 @@
 from collections import deque
-from collections.abc import Iterable
 
 from attrs import define
 from lark import Token, Transformer, Tree
 
-from livecoding.base_types import Duration, Event, Note, Pattern, Rest
+from livecoding.base_types import Duration, Event, Note, NotePattern, Rest
 from livecoding.notes import NoteNumbers
 
 
@@ -13,8 +12,8 @@ _LEAF_TYPE = int | tuple[int, int]
 
 def _get_pattern(
     name: str, length_bars: Duration, tree: Tree[_LEAF_TYPE], default_velocity: float
-) -> Pattern:
-    return Pattern(
+) -> NotePattern:
+    return NotePattern(
         name=name,
         length_bars=length_bars,
         events=_get_events(tree, default_velocity, length_bars),
@@ -77,14 +76,6 @@ class _PatternTransformer(Transformer[Token, _LEAF_TYPE]):
         assert len(value) == 2
         return (value[0], value[1])
 
-    def triple(self, value: tuple[int, int, Duration]) -> tuple[int, int, Duration]:
-        assert len(value) == 3
-        return (
-            value[0],
-            value[1],
-            value[2],
-        )
-
 
 _TRANSFORMER: _PatternTransformer | None = None
 
@@ -98,8 +89,8 @@ def _get_transformer() -> _PatternTransformer:
 
 @define
 class _rev:
-    def __call__(self, pattern: Pattern) -> Pattern:
-        return Pattern(
+    def __call__(self, pattern: NotePattern) -> NotePattern:
+        return NotePattern(
             events=list(reversed(pattern.events)),
             length_bars=pattern.length_bars,
             name=pattern.name,
@@ -111,16 +102,10 @@ rev = _rev()
 
 @define
 class tran:
-    amount: int | Iterable[int]
+    amount: int
 
-    def __call__(self, pattern: Pattern) -> Pattern:
-        if isinstance(self.amount, int):
-            return Pattern(
-                events=list(map(lambda ev: self._transpose(ev), pattern.events)),
-                length_bars=pattern.length_bars,
-                name=pattern.name,
-            )
-        return Pattern(
+    def __call__(self, pattern: NotePattern) -> NotePattern:
+        return NotePattern(
             events=list(map(lambda ev: self._transpose(ev), pattern.events)),
             length_bars=pattern.length_bars,
             name=pattern.name,
@@ -142,10 +127,10 @@ class tran:
 class rot:
     n: int
 
-    def __call__(self, pattern: Pattern) -> Pattern:
+    def __call__(self, pattern: NotePattern) -> NotePattern:
         events = deque(pattern.events)
         events.rotate(self.n)
-        return Pattern(
+        return NotePattern(
             name=pattern.name,
             length_bars=pattern.length_bars,
             events=list(events),
@@ -167,8 +152,8 @@ def _right_clip(length_bars: Duration, events: list[Event]) -> list[Event]:
 class lclip:
     length_bars: Duration
 
-    def __call__(self, pattern: Pattern) -> Pattern:
-        return Pattern(
+    def __call__(self, pattern: NotePattern) -> NotePattern:
+        return NotePattern(
             name=pattern.name,
             length_bars=pattern.length_bars,
             events=list(
@@ -181,8 +166,8 @@ class lclip:
 class rclip:
     length_bars: Duration
 
-    def __call__(self, pattern: Pattern) -> Pattern:
-        return Pattern(
+    def __call__(self, pattern: NotePattern) -> NotePattern:
+        return NotePattern(
             name=pattern.name,
             length_bars=pattern.length_bars,
             events=_right_clip(self.length_bars, pattern.events),
@@ -193,8 +178,8 @@ class rclip:
 class ladd:
     ev: Event
 
-    def __call__(self, pattern: Pattern) -> Pattern:
-        return Pattern(
+    def __call__(self, pattern: NotePattern) -> NotePattern:
+        return NotePattern(
             name=pattern.name,
             length_bars=pattern.length_bars + self.ev.dur_frac,
             events=[self.ev] + pattern.events,
@@ -205,8 +190,8 @@ class ladd:
 class radd:
     ev: Event
 
-    def __call__(self, pattern: Pattern) -> Pattern:
-        return Pattern(
+    def __call__(self, pattern: NotePattern) -> NotePattern:
+        return NotePattern(
             name=pattern.name,
             length_bars=pattern.length_bars + self.ev.dur_frac,
             events=pattern.events + [self.ev],
@@ -217,8 +202,8 @@ class radd:
 class resize:
     scalar: Duration
 
-    def __call__(self, pattern: Pattern) -> Pattern:
-        return Pattern(
+    def __call__(self, pattern: NotePattern) -> NotePattern:
+        return NotePattern(
             name=pattern.name,
             length_bars=self.scalar * pattern.length_bars,
             events=[
