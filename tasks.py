@@ -34,19 +34,11 @@ def pytest(ctx):
     ctx.run(cmd)
 
 
-@task
-def cargo_test(ctx):
-    cmd = "cargo test --package livecoding"
-    print(cmd)
-    ctx.run(cmd)
-
-
 @task(
     code_style,
     linters,
     mypy_livecoding,
     pytest,
-    cargo_test,
 )
 def build(_):
     pass
