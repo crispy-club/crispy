@@ -8,6 +8,7 @@ jobs:
   build_python_client:
     name: Build Python Client
     runs-on: ubuntu-latest
+    permissions: write-all
     container:
       image: "python:3.13.1-bookworm"
     steps:
