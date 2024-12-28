@@ -1,112 +1,22 @@
-from livecoding.base_types import Duration, Event, Note, Pattern
-from livecoding.pattern import rev, transpose
+from livecoding.pattern import rev, rot, tran
+from livecoding.plugin import note_pattern
 
 
 def test_rev() -> None:
-    foo = Pattern(
-        events=[
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=60,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=63,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-        ],
-        length_bars=Duration(1, 1),
-        name="foo",
-    )
-    assert rev(foo) == Pattern(
-        events=[
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=63,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=60,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-        ],
-        length_bars=Duration(1, 1),
-        name="foo",
-    )
+    foo = note_pattern("foo", "[c3 d3 e3 f3 g3]") | rev
+    assert foo == note_pattern("foo", "[g3 f3 e3 d3 c3]")
 
 
 def test_transpose() -> None:
-    foo = Pattern(
-        events=[
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=60,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=63,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-        ],
-        length_bars=Duration(1, 1),
-        name="foo",
-    )
-    assert transpose(7, foo) == Pattern(
-        events=[
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=67,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=70,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-        ],
-        length_bars=Duration(1, 1),
-        name="foo",
-    )
+    foo = note_pattern("foo", "[c3 e3 g3]") | tran(7)
+    assert foo == note_pattern("foo", "[g3 b3 d4]")
+
+
+def test_rot_right() -> None:
+    foo = note_pattern("foo", "[c3 d3 e3 f3 g3]") | rot(1)
+    assert foo == note_pattern("foo", "[g3 c3 d3 e3 f3]")
+
+
+def test_rot_left() -> None:
+    foo = note_pattern("foo", "[c3 d3 e3 f3 g3]") | rot(-2)
+    assert foo == note_pattern("foo", "[e3 f3 g3 c3 d3]")

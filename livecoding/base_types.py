@@ -1,6 +1,6 @@
 import json
 from math import gcd, lcm
-from typing import Literal, Union, overload
+from typing import Callable, Literal, Union, overload
 
 from attrs import asdict, define
 
@@ -14,7 +14,7 @@ class Duration:
     den: int
 
     def __init__(self, num: int, den: int) -> None:
-        assert num > 0 and den > 0
+        assert den != 0
         self.num = num
         self.den = den
 
@@ -38,6 +38,38 @@ class Duration:
         lsimp, rsimp = self._simplify(), other._simplify()
         return lsimp.num == rsimp.num and lsimp.den == rsimp.den
 
+    def __lt__(self, other: "Duration") -> bool:
+        lcmult = lcm(self.den, other.den)
+        lnum, rnum = (
+            self.num * int(lcmult / self.den),
+            other.num * int(lcmult / other.den),
+        )
+        return lnum < rnum
+
+    def __le__(self, other: "Duration") -> bool:
+        lcmult = lcm(self.den, other.den)
+        lnum, rnum = (
+            self.num * int(lcmult / self.den),
+            other.num * int(lcmult / other.den),
+        )
+        return lnum <= rnum
+
+    def __gt__(self, other: "Duration") -> bool:
+        lcmult = lcm(self.den, other.den)
+        lnum, rnum = (
+            self.num * int(lcmult / self.den),
+            other.num * int(lcmult / other.den),
+        )
+        return lnum > rnum
+
+    def __ge__(self, other: "Duration") -> bool:
+        lcmult = lcm(self.den, other.den)
+        lnum, rnum = (
+            self.num * int(lcmult / self.den),
+            other.num * int(lcmult / other.den),
+        )
+        return lnum >= rnum
+
     @overload
     def __mul__(self, other: "Duration") -> "Duration": ...
 
@@ -49,6 +81,9 @@ class Duration:
             return self.__mul__(Duration(other, 1))
         assert isinstance(other, Duration)
         return Duration(self.num * other.num, self.den * other.den)._simplify()
+
+    def __sub__(self, other: "Duration") -> "Duration":
+        return self.__add__(Duration(other.num * -1, other.den))
 
     @overload
     def __truediv__(self, other: int) -> "Duration": ...
@@ -63,6 +98,9 @@ class Duration:
         assert isinstance(other, Duration)
         return self.__mul__(Duration(other.den, other.num))
 
+    def __rtruediv__(self, n: int) -> "Duration":
+        return Duration(num=self.den, den=self.num) * n
+
     def __repr__(self) -> str:
         return f"({self.num}, {self.den})"
 
@@ -74,6 +112,9 @@ class Duration:
         if gcdiv == 1:
             return self
         return Duration(int(self.num / gcdiv), int(self.den / gcdiv))
+
+
+Bar = Duration(1, 1)
 
 
 @define
@@ -142,6 +183,9 @@ class Pattern:
             length_bars=self.length_bars * times,
             name=self.name,
         )
+
+    def __or__(self, pattern_filter: Callable[["Pattern"], "Pattern"]) -> "Pattern":
+        return pattern_filter(self)
 
     def json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))

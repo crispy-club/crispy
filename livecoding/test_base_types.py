@@ -1,9 +1,20 @@
-from livecoding.base_types import Duration, Event, Note, Pattern
+# import functools
+
+from livecoding.base_types import Bar, Duration, Note
+from livecoding.pattern import resize
+from livecoding.plugin import note_pattern
 
 
 def test_duration_division() -> None:
-    one_bar = Duration(1, 1)
-    assert one_bar / 4 == Duration(1, 4)
+    assert Bar / 4 == Duration(1, 4)
+    half_note = Bar / 2
+    quarter_note = Bar / 4
+    assert half_note / quarter_note == Bar * 2
+    assert 1 / quarter_note == Bar * 4
+
+
+def test_duration_subtraction() -> None:
+    assert Duration(1, 4) - Duration(1, 8) == Duration(1, 8)
 
 
 def test_note_eq() -> None:
@@ -13,8 +24,7 @@ def test_note_eq() -> None:
 
 
 def test_duration_json() -> None:
-    dur = Duration(1, 1)
-    assert dur.json() == """{"num":1,"den":1}"""
+    assert Bar.json() == """{"num":1,"den":1}"""
 
 
 def test_note_json() -> None:
@@ -29,139 +39,19 @@ def test_note_json() -> None:
 
 
 def test_pattern_json() -> None:
-    pattern = Pattern(
-        events=[
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=60,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-        ],
-        length_bars=Duration(1, 1),
-        name="foo",
-    )
+    pattern = note_pattern("foo", "[c3]")
     assert (
         pattern.json()
-        == """{"events":[{"action":{"NoteEvent":{"note_num":60,"velocity":0.9,"dur_ms":20}},"dur_frac":{"num":1,"den":4}}],"length_bars":{"num":1,"den":1},"name":"foo"}"""
+        == """{"events":[{"action":{"NoteEvent":{"note_num":60,"velocity":0.8,"dur_ms":20}},"dur_frac":{"num":1,"den":1}}],"length_bars":{"num":1,"den":1},"name":"foo"}"""
     )
 
 
 def test_pattern_add() -> None:
-    foo = Pattern(
-        events=[
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=60,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-        ],
-        length_bars=Duration(1, 1),
-        name="foo",
-    )
-    bar = Pattern(
-        events=[
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=63,
-                        velocity=0.7,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-        ],
-        length_bars=Duration(1, 1),
-        name="bar",
-    )
-    assert foo + bar == Pattern(
-        events=[
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=60,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=63,
-                        velocity=0.7,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-        ],
-        length_bars=Duration(2, 1),
-        name="foo",
+    note_pattern("foo", "[c3]") + note_pattern("bar", "[e3]") == (
+        note_pattern("foo", "[c3 e3]") | resize(Bar * 2)
     )
 
 
 def test_pattern_mul() -> None:
-    foo = Pattern(
-        events=[
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=60,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-        ],
-        length_bars=Duration(1, 1),
-        name="foo",
-    )
-    assert foo * 3 == Pattern(
-        events=[
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=60,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=60,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-            Event(
-                action=Note(
-                    Note.Params(
-                        note_num=60,
-                        velocity=0.9,
-                        dur_ms=20,
-                    ),
-                ),
-                dur_frac=Duration(1, 4),
-            ),
-        ],
-        length_bars=Duration(3, 1),
-        name="foo",
-    )
+    foo = note_pattern("foo", "[c3]")
+    assert foo * 3 == note_pattern("foo", "[c3 c3 c3]") | resize(Bar * 3)

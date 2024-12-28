@@ -1,3 +1,7 @@
+from collections import deque
+from collections.abc import Iterable
+
+from attrs import define
 from lark import Token, Transformer, Tree
 
 from livecoding.base_types import Duration, Event, Note, Pattern, Rest
@@ -90,26 +94,136 @@ def _get_transformer() -> _PatternTransformer:
     return _TRANSFORMER
 
 
-def rev(pattern: Pattern) -> Pattern:
-    return Pattern(
-        events=list(reversed(pattern.events)),
-        length_bars=pattern.length_bars,
-        name=pattern.name,
-    )
+@define
+class _rev:
+    def __call__(self, pattern: Pattern) -> Pattern:
+        return Pattern(
+            events=list(reversed(pattern.events)),
+            length_bars=pattern.length_bars,
+            name=pattern.name,
+        )
 
 
-def _transpose(amount: int, event: Event) -> Event:
-    if event.action == Rest:
-        return event
-    elif isinstance(event.action, Note):
-        return Event(dur_frac=event.dur_frac, action=event.action.transpose(amount))
-    else:
-        raise ValueError(f"unknown event type: {event}")
+rev = _rev()
 
 
-def transpose(amount: int, pattern: Pattern) -> Pattern:
-    return Pattern(
-        events=list(map(lambda ev: _transpose(amount, ev), pattern.events)),
-        length_bars=pattern.length_bars,
-        name=pattern.name,
-    )
+@define
+class tran:
+    amount: int | Iterable[int]
+
+    def __call__(self, pattern: Pattern) -> Pattern:
+        if isinstance(self.amount, int):
+            return Pattern(
+                events=list(map(lambda ev: self._transpose(ev), pattern.events)),
+                length_bars=pattern.length_bars,
+                name=pattern.name,
+            )
+        return Pattern(
+            events=list(map(lambda ev: self._transpose(ev), pattern.events)),
+            length_bars=pattern.length_bars,
+            name=pattern.name,
+        )
+
+    def _transpose(self, event: Event) -> Event:
+        assert isinstance(self.amount, int)
+        if event.action == Rest:
+            return event
+        elif isinstance(event.action, Note):
+            return Event(
+                dur_frac=event.dur_frac, action=event.action.transpose(self.amount)
+            )
+        else:
+            raise ValueError(f"unknown event type: {event}")
+
+
+@define
+class rot:
+    n: int
+
+    def __call__(self, pattern: Pattern) -> Pattern:
+        events = deque(pattern.events)
+        events.rotate(self.n)
+        return Pattern(
+            name=pattern.name,
+            length_bars=pattern.length_bars,
+            events=list(events),
+        )
+
+
+def _right_clip(length_bars: Duration, events: list[Event]) -> list[Event]:
+    running_total = Duration(0, 1)
+    for idx, event in enumerate(events):
+        running_total += event.dur_frac
+        if running_total >= length_bars:
+            return events[: idx - 1] + [
+                Event(action=event.action, dur_frac=running_total - length_bars)
+            ]
+    return events
+
+
+@define
+class lclip:
+    length_bars: Duration
+
+    def __call__(self, pattern: Pattern) -> Pattern:
+        return Pattern(
+            name=pattern.name,
+            length_bars=pattern.length_bars,
+            events=list(
+                reversed(_right_clip(self.length_bars, list(reversed(pattern.events))))
+            ),
+        )
+
+
+@define
+class rclip:
+    length_bars: Duration
+
+    def __call__(self, pattern: Pattern) -> Pattern:
+        return Pattern(
+            name=pattern.name,
+            length_bars=pattern.length_bars,
+            events=_right_clip(self.length_bars, pattern.events),
+        )
+
+
+@define
+class ladd:
+    ev: Event
+
+    def __call__(self, pattern: Pattern) -> Pattern:
+        return Pattern(
+            name=pattern.name,
+            length_bars=pattern.length_bars + self.ev.dur_frac,
+            events=[self.ev] + pattern.events,
+        )
+
+
+@define
+class radd:
+    ev: Event
+
+    def __call__(self, pattern: Pattern) -> Pattern:
+        return Pattern(
+            name=pattern.name,
+            length_bars=pattern.length_bars + self.ev.dur_frac,
+            events=pattern.events + [self.ev],
+        )
+
+
+@define
+class resize:
+    scalar: Duration
+
+    def __call__(self, pattern: Pattern) -> Pattern:
+        return Pattern(
+            name=pattern.name,
+            length_bars=self.scalar * pattern.length_bars,
+            events=[
+                Event(
+                    action=ev.action,
+                    dur_frac=ev.dur_frac * self.scalar,
+                )
+                for ev in pattern.events
+            ],
+        )
