@@ -1,8 +1,12 @@
 # import functools
 
-from livecoding.base_types import Bar, Duration, Note
+from livecoding.base_types import Bar, Duration, Event, Note
 from livecoding.pattern import resize
 from livecoding.plugin import note_pattern
+
+
+def test_duration_add() -> None:
+    assert Duration(1, 5) + Duration(1, 3) == Duration(8, 15)
 
 
 def test_duration_division() -> None:
@@ -13,8 +17,38 @@ def test_duration_division() -> None:
     assert 1 / quarter_note == Bar * 4
 
 
+def test_duration_eq() -> None:
+    assert Duration(1, 5) == Duration(1, 5)
+    assert Duration(1, 5) != "1/5"
+
+
+def test_duration_gt() -> None:
+    assert Duration(1, 2) > Duration(1, 4)
+    assert Duration(1, 5) >= Duration(1, 5)
+
+
+def test_duration_lt() -> None:
+    assert Duration(1, 5) < Duration(1, 4)
+    assert Duration(1, 5) <= Duration(1, 5)
+
+
 def test_duration_subtraction() -> None:
     assert Duration(1, 4) - Duration(1, 8) == Duration(1, 8)
+
+
+def test_duration_str() -> None:
+    assert str(Duration(1, 4)) == "1/4"
+
+
+def test_event_json() -> None:
+    ev = Event(
+        action=Note(Note.Params(note_num=60, velocity=0.7, dur_ms=20)),
+        dur_frac=Duration(1, 4),
+    )
+    assert (
+        ev.json()
+        == """{"action":{"NoteEvent":{"note_num":60,"velocity":0.7,"dur_ms":20}},"dur_frac":{"num":1,"den":4}}"""
+    )
 
 
 def test_note_eq() -> None:

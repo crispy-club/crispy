@@ -27,10 +27,7 @@ class Duration:
             self.num * int(lcmult / self.den),
             other.num * int(lcmult / other.den),
         )
-        gcdiv = gcd(lnum, rnum)
-        if gcdiv == 1:
-            return Duration(lnum + rnum, lcmult)._simplify()
-        return Duration(int(lnum / gcdiv) + int(rnum / gcdiv), lcmult)
+        return Duration(lnum + rnum, lcmult)._simplify()
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Duration):
@@ -105,7 +102,7 @@ class Duration:
         return f"({self.num}, {self.den})"
 
     def __str__(self) -> str:
-        return f"({self.num}, {self.den})"
+        return f"{self.num}/{self.den}"
 
     def _simplify(self) -> "Duration":
         gcdiv = gcd(self.num, self.den)
