@@ -12,12 +12,6 @@ def lark_ebnf() -> str:
         for notes in itertools.batched(NoteNumbers, n=12)
     )
 
-    velocity_values = """
-            | """.join(
-        " | ".join((f'"{str(i)}"' for i in batch))
-        for batch in itertools.batched(iter(range(128)), n=16)
-    )
-
     return f"""
     pattern: "[" [ event* ] "]"
 
@@ -30,14 +24,13 @@ def lark_ebnf() -> str:
 
     !note: {notes}
 
-    !velocity: {velocity_values}
-
-    duration: INT "/" INT
+    velocity: SIGNED_NUMBER
 
     pair: note "," velocity
 
     %import common.INT
     %import common.WS
+    %import common.SIGNED_NUMBER
     %ignore WS
     """
 

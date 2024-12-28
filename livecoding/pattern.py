@@ -40,10 +40,18 @@ def _get_events(
                 )
             )  # Need to be smarter about dur_ms
         elif isinstance(child, tuple):
-            assert len(events) == 2
+            assert len(child) == 2
             events.append(
                 Event(
                     action=Note(Note.Params(child[0], child[1], 20)),
+                    dur_frac=each_dur,
+                )
+            )
+        elif isinstance(child, str):
+            assert child == "Rest"
+            events.append(
+                Event(
+                    action="Rest",
                     dur_frac=each_dur,
                 )
             )
@@ -58,18 +66,12 @@ class _PatternTransformer(Transformer[Token, _LEAF_TYPE]):
 
     def note(self, value: list[str]) -> int:
         assert len(value) == 1
-        note_num = NoteNumbers.get(value[0])
-        if note_num is None:
-            raise ValueError(f"unknown note value {value[0]}")
-        return note_num
+        # No risk of KeyError here since the grammar enforces valid note numbers
+        return NoteNumbers[value[0]]
 
-    def velocity(self, value: list[str]) -> int:
+    def velocity(self, value: list[str]) -> float:
         assert len(value) == 1
-        return int(value[0])
-
-    def duration(self, value: list[str]) -> Duration:
-        assert len(value) == 2
-        return Duration(int(value[0]), int(value[1]))
+        return float(value[0])
 
     def pair(self, value: list[int]) -> tuple[int, int]:
         assert len(value) == 2
