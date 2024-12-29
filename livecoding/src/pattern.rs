@@ -89,6 +89,7 @@ pub struct PrecisePattern {
     pub events: HashMap<usize, Vec<SimpleNoteEvent>>,
     pub length_samples: usize,
     pub playing: bool,
+    pub notes_playing: HashMap<(u8, u8, u8), ()>,
 }
 
 pub fn compute_extra_samples(samples_remainder: i64, num_events: usize) -> Vec<i64> {
@@ -176,6 +177,7 @@ impl PrecisePattern {
             events: events_map,
             length_samples: sample_idx,
             playing: playing,
+            notes_playing: HashMap::new(),
         };
     }
 
@@ -220,5 +222,114 @@ impl PrecisePattern {
             };
         }
         note_events
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::pattern::{
+        compute_extra_samples, Event, EventType, FractionalDuration, Note, NoteType, Pattern,
+        PrecisePattern, SimpleNoteEvent,
+    };
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_compute_extra_samples() -> Result<(), String> {
+        let extra_samples = compute_extra_samples(37, 5);
+        assert_eq!(extra_samples, vec![8, 8, 7, 7, 7]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_precise_pattern() -> Result<(), String> {
+        let pattern = Pattern {
+            length_bars: Some(FractionalDuration { num: 1, den: 2 }),
+            events: vec![
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 60,
+                        velocity: 0.8,
+                        dur_ms: 20,
+                    }),
+                    dur_frac: FractionalDuration { num: 1, den: 2 },
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 96,
+                        velocity: 0.8,
+                        dur_ms: 20,
+                    }),
+                    dur_frac: FractionalDuration { num: 1, den: 2 },
+                },
+            ],
+        };
+        let sample_rate = 48000 as f32;
+        let tempo = 110 as f64;
+        let precise_pattern = PrecisePattern::from(&mut pattern.clone(), sample_rate, tempo, true);
+        let buffer_size_samples = 256 as usize;
+        let expectations: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::from([
+            (
+                0,
+                vec![SimpleNoteEvent {
+                    note_type: NoteType::On,
+                    timing: 0,
+                    voice_id: None,
+                    channel: 1,
+                    note: 60,
+                    velocity: 0.8,
+                }],
+            ),
+            (
+                3,
+                vec![SimpleNoteEvent {
+                    note_type: NoteType::Off,
+                    timing: 192,
+                    voice_id: None,
+                    channel: 1,
+                    note: 60,
+                    velocity: 0.0,
+                }],
+            ),
+            (
+                102,
+                vec![SimpleNoteEvent {
+                    note_type: NoteType::On,
+                    timing: 70,
+                    voice_id: None,
+                    channel: 1,
+                    note: 96,
+                    velocity: 0.8,
+                }],
+            ),
+            (
+                106,
+                vec![SimpleNoteEvent {
+                    note_type: NoteType::Off,
+                    timing: 6,
+                    voice_id: None,
+                    channel: 1,
+                    note: 96,
+                    velocity: 0.0,
+                }],
+            ),
+            (
+                204,
+                vec![SimpleNoteEvent {
+                    note_type: NoteType::On,
+                    timing: 139,
+                    voice_id: None,
+                    channel: 1,
+                    note: 60,
+                    velocity: 0.8,
+                }],
+            ),
+        ]);
+        for (bufnum, expected_events) in expectations.into_iter() {
+            let buffer_start_samples = bufnum * buffer_size_samples;
+            let buffer_end_samples = buffer_start_samples + buffer_size_samples;
+            let events = precise_pattern.get_events(buffer_start_samples, buffer_end_samples);
+            assert_eq!(expected_events, events);
+        }
+        Ok(())
     }
 }
