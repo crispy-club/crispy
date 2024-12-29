@@ -4,8 +4,7 @@ import requests
 from attrs import asdict
 
 from livecoding.base_types import Duration, NotePattern
-from livecoding.grammar import get_pattern_parser
-from livecoding.pattern import _get_pattern, _get_transformer
+from livecoding.grammar import get_pattern_parser, get_note_pattern, get_transformer
 
 
 def note_pattern(
@@ -15,8 +14,8 @@ def note_pattern(
     default_velocity: float = 0.8,
 ) -> NotePattern:
     ast = get_pattern_parser().parse(definition)
-    transformer = _get_transformer()
-    return _get_pattern(
+    transformer = get_transformer()
+    return get_note_pattern(
         name=name,
         length_bars=length_bars,
         tree=transformer.transform(ast),  # type: ignore

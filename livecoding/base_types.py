@@ -112,6 +112,7 @@ class Duration:
 
 
 Bar = Duration(1, 1)
+Zero = Duration(0, 1)
 
 
 @define
