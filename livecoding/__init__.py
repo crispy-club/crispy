@@ -2,7 +2,7 @@ from .base_types import (
     Duration as Duration,
     Event as Event,
     Note as Note,
-    Pattern as Pattern,
+    NotePattern as NotePattern,
     Rest as Rest,
 )
 from .grammar import (

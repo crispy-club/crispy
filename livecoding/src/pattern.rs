@@ -160,7 +160,7 @@ impl PrecisePattern {
                         sample_idx,
                         vec![SimpleNoteEvent {
                             note_type: NoteType::Rest,
-                            timing: 0,
+                            timing: sample_idx as u32,
                             voice_id: None,
                             channel: 1,
                             note: 0,

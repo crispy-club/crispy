@@ -29,7 +29,7 @@ def mypy_livecoding(ctx):
 
 @task
 def pytest(ctx):
-    cmd = f"pytest --color=yes {DIRNAME}"
+    cmd = f"pytest --color=yes --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov=livecoding {DIRNAME}"
     print(cmd)
     ctx.run(cmd)
 

@@ -1,6 +1,6 @@
 import json
 from math import gcd, lcm
-from typing import Literal, Union, overload
+from typing import Callable, Literal, Union, overload
 
 from attrs import asdict, define
 
@@ -14,7 +14,7 @@ class Duration:
     den: int
 
     def __init__(self, num: int, den: int) -> None:
-        assert num > 0 and den > 0
+        assert den != 0
         self.num = num
         self.den = den
 
@@ -27,10 +27,7 @@ class Duration:
             self.num * int(lcmult / self.den),
             other.num * int(lcmult / other.den),
         )
-        gcdiv = gcd(lnum, rnum)
-        if gcdiv == 1:
-            return Duration(lnum + rnum, lcmult)._simplify()
-        return Duration(int(lnum / gcdiv) + int(rnum / gcdiv), lcmult)
+        return Duration(lnum + rnum, lcmult)._simplify()
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Duration):
@@ -38,8 +35,52 @@ class Duration:
         lsimp, rsimp = self._simplify(), other._simplify()
         return lsimp.num == rsimp.num and lsimp.den == rsimp.den
 
-    def __mul__(self, other: "Duration") -> "Duration":
-        return Duration(self.num * other.num, self.den * other.den)
+    def __lt__(self, other: "Duration") -> bool:
+        lcmult = lcm(self.den, other.den)
+        lnum, rnum = (
+            self.num * int(lcmult / self.den),
+            other.num * int(lcmult / other.den),
+        )
+        return lnum < rnum
+
+    def __le__(self, other: "Duration") -> bool:
+        lcmult = lcm(self.den, other.den)
+        lnum, rnum = (
+            self.num * int(lcmult / self.den),
+            other.num * int(lcmult / other.den),
+        )
+        return lnum <= rnum
+
+    def __gt__(self, other: "Duration") -> bool:
+        lcmult = lcm(self.den, other.den)
+        lnum, rnum = (
+            self.num * int(lcmult / self.den),
+            other.num * int(lcmult / other.den),
+        )
+        return lnum > rnum
+
+    def __ge__(self, other: "Duration") -> bool:
+        lcmult = lcm(self.den, other.den)
+        lnum, rnum = (
+            self.num * int(lcmult / self.den),
+            other.num * int(lcmult / other.den),
+        )
+        return lnum >= rnum
+
+    @overload
+    def __mul__(self, other: "Duration") -> "Duration": ...
+
+    @overload
+    def __mul__(self, other: int) -> "Duration": ...
+
+    def __mul__(self, other: Union["Duration", int]) -> "Duration":
+        if isinstance(other, int):
+            return self.__mul__(Duration(other, 1))
+        assert isinstance(other, Duration)
+        return Duration(self.num * other.num, self.den * other.den)._simplify()
+
+    def __sub__(self, other: "Duration") -> "Duration":
+        return self.__add__(Duration(other.num * -1, other.den))
 
     @overload
     def __truediv__(self, other: int) -> "Duration": ...
@@ -54,17 +95,24 @@ class Duration:
         assert isinstance(other, Duration)
         return self.__mul__(Duration(other.den, other.num))
 
+    def __rtruediv__(self, n: int) -> "Duration":
+        return Duration(num=self.den, den=self.num) * n
+
     def __repr__(self) -> str:
         return f"({self.num}, {self.den})"
 
     def __str__(self) -> str:
-        return f"({self.num}, {self.den})"
+        return f"{self.num}/{self.den}"
 
     def _simplify(self) -> "Duration":
         gcdiv = gcd(self.num, self.den)
         if gcdiv == 1:
             return self
         return Duration(int(self.num / gcdiv), int(self.den / gcdiv))
+
+
+Bar = Duration(1, 1)
+Zero = Duration(0, 1)
 
 
 @define
@@ -94,6 +142,15 @@ class Note:
     def json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))
 
+    def transpose(self, amount: int) -> "Note":
+        return Note(
+            self.Params(
+                note_num=(self.NoteEvent.note_num + amount) % 128,
+                velocity=self.NoteEvent.velocity,
+                dur_ms=self.NoteEvent.dur_ms,
+            ),
+        )
+
 
 @define
 class Event:
@@ -105,10 +162,30 @@ class Event:
 
 
 @define
-class Pattern:
+class NotePattern:
     events: list[Event]
     length_bars: Duration
     name: str
+
+    def __add__(self, other: "NotePattern") -> "NotePattern":
+        return NotePattern(
+            events=self.events + other.events,
+            length_bars=self.length_bars + other.length_bars,
+            name=self.name,
+        )
+
+    def __mul__(self, times: int) -> "NotePattern":
+        assert times > 0
+        return NotePattern(
+            events=self.events * times,
+            length_bars=self.length_bars * times,
+            name=self.name,
+        )
+
+    def __or__(
+        self, pattern_filter: Callable[["NotePattern"], "NotePattern"]
+    ) -> "NotePattern":
+        return pattern_filter(self)
 
     def json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))

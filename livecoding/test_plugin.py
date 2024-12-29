@@ -1,4 +1,4 @@
-from livecoding.base_types import Duration, Event, Note, Pattern
+from livecoding.base_types import Duration, Event, Note, NotePattern
 from livecoding.plugin import note_pattern
 
 
@@ -18,7 +18,7 @@ def test_livecoding_duration_division() -> None:
 def test_note_pattern_simple() -> None:
     pattern = note_pattern("bassline", "[c1 d#1 g1 c2]")
     print(pattern)
-    assert pattern == Pattern(
+    assert pattern == NotePattern(
         name="bassline",
         length_bars=Duration(1, 1),
         events=[
@@ -45,7 +45,7 @@ def test_note_pattern_simple() -> None:
 def test_note_pattern_nested() -> None:
     pattern = note_pattern("bassline", "[c1 [d#1 c1 d#1] g1 c2]")
     print(pattern)
-    assert pattern == Pattern(
+    assert pattern == NotePattern(
         name="bassline",
         length_bars=Duration(1, 1),
         events=[
