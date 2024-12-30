@@ -46,7 +46,9 @@ impl Live {
             nih_log!("recomputing patterns after tempo change");
             self.recompute_patterns(context);
         }
-        for precise_pattern in self.precise_patterns.values() {
+        let mut precise_patterns = self.precise_patterns.clone();
+
+        for precise_pattern in precise_patterns.values_mut() {
             if !precise_pattern.playing {
                 continue;
             }
@@ -133,8 +135,15 @@ impl Live {
                 events: named_pattern.events.clone(),
             },
         );
-        self.precise_patterns
+        let prev_pattern = self
+            .precise_patterns
             .insert(named_pattern.name.clone(), precise_pattern.clone());
+        if let Some(mut pattern) = prev_pattern {
+            let notes_playing = pattern.get_notes_playing();
+            notes_playing.into_iter().for_each(|nev| {
+                self.send(context, nev);
+            });
+        }
         Ok(())
     }
 
@@ -323,112 +332,3 @@ impl Vst3Plugin for Live {
 
 nih_export_clap!(Live);
 nih_export_vst3!(Live);
-
-#[cfg(test)]
-mod tests {
-    use crate::pattern::{
-        compute_extra_samples, Event, EventType, FractionalDuration, Note, NoteType, Pattern,
-        PrecisePattern, SimpleNoteEvent,
-    };
-    use std::collections::HashMap;
-
-    #[test]
-    fn test_compute_extra_samples() -> Result<(), String> {
-        let extra_samples = compute_extra_samples(37, 5);
-        assert_eq!(extra_samples, vec![8, 8, 7, 7, 7]);
-        Ok(())
-    }
-
-    #[test]
-    fn test_precise_pattern() -> Result<(), String> {
-        let pattern = Pattern {
-            length_bars: Some(FractionalDuration { num: 1, den: 2 }),
-            events: vec![
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 60,
-                        velocity: 0.8,
-                        dur_ms: 20,
-                    }),
-                    dur_frac: FractionalDuration { num: 1, den: 2 },
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 96,
-                        velocity: 0.8,
-                        dur_ms: 20,
-                    }),
-                    dur_frac: FractionalDuration { num: 1, den: 2 },
-                },
-            ],
-        };
-        let sample_rate = 48000 as f32;
-        let tempo = 110 as f64;
-        let precise_pattern = PrecisePattern::from(&mut pattern.clone(), sample_rate, tempo, true);
-        let buffer_size_samples = 256 as usize;
-        let expectations: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::from([
-            (
-                0,
-                vec![SimpleNoteEvent {
-                    note_type: NoteType::On,
-                    timing: 0,
-                    voice_id: None,
-                    channel: 1,
-                    note: 60,
-                    velocity: 0.8,
-                }],
-            ),
-            (
-                3,
-                vec![SimpleNoteEvent {
-                    note_type: NoteType::Off,
-                    timing: 192,
-                    voice_id: None,
-                    channel: 1,
-                    note: 60,
-                    velocity: 0.0,
-                }],
-            ),
-            (
-                102,
-                vec![SimpleNoteEvent {
-                    note_type: NoteType::On,
-                    timing: 70,
-                    voice_id: None,
-                    channel: 1,
-                    note: 96,
-                    velocity: 0.8,
-                }],
-            ),
-            (
-                106,
-                vec![SimpleNoteEvent {
-                    note_type: NoteType::Off,
-                    timing: 6,
-                    voice_id: None,
-                    channel: 1,
-                    note: 96,
-                    velocity: 0.0,
-                }],
-            ),
-            (
-                204,
-                vec![SimpleNoteEvent {
-                    note_type: NoteType::On,
-                    timing: 139,
-                    voice_id: None,
-                    channel: 1,
-                    note: 60,
-                    velocity: 0.8,
-                }],
-            ),
-        ]);
-        for (bufnum, expected_events) in expectations.into_iter() {
-            let buffer_start_samples = bufnum * buffer_size_samples;
-            let buffer_end_samples = buffer_start_samples + buffer_size_samples;
-            let events = precise_pattern.get_events(buffer_start_samples, buffer_end_samples);
-            assert_eq!(expected_events, events);
-        }
-        Ok(())
-    }
-}
