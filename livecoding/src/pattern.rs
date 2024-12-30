@@ -107,6 +107,58 @@ pub fn compute_extra_samples(samples_remainder: i64, num_events: usize) -> Vec<i
     extra_samples
 }
 
+fn insert_event(
+    events_map: &mut HashMap<usize, Vec<SimpleNoteEvent>>,
+    event: &Event,
+    sample_rate: f32,
+    sample_idx: usize,
+) {
+    let samples_per_milli = sample_rate / 1000.0;
+
+    match event.action {
+        EventType::NoteEvent(note) => {
+            events_map.insert(
+                sample_idx,
+                vec![SimpleNoteEvent {
+                    note_type: NoteType::On,
+                    timing: sample_idx as u32,
+                    voice_id: None,
+                    channel: 1,
+                    note: note.note_num,
+                    velocity: note.velocity,
+                }],
+            );
+            let note_off_timing =
+                (sample_idx + ((samples_per_milli as f64) * (note.dur_ms as f64)) as usize) as u32;
+
+            events_map.insert(
+                note_off_timing as usize,
+                vec![SimpleNoteEvent {
+                    note_type: NoteType::Off,
+                    timing: note_off_timing,
+                    voice_id: None,
+                    channel: 1,
+                    note: note.note_num,
+                    velocity: 0.0,
+                }],
+            );
+        }
+        EventType::Rest => {
+            events_map.insert(
+                sample_idx,
+                vec![SimpleNoteEvent {
+                    note_type: NoteType::Rest,
+                    timing: sample_idx as u32,
+                    voice_id: None,
+                    channel: 1,
+                    note: 0,
+                    velocity: 0.0,
+                }],
+            );
+        }
+    }
+}
+
 impl PrecisePattern {
     pub fn from(
         pattern: &mut Pattern,
@@ -122,54 +174,11 @@ impl PrecisePattern {
         let samples_remainder = pattern_length_samples % least_common_multiple;
         let extra_samples = compute_extra_samples(samples_remainder, pattern.events.len());
 
-        let samples_per_milli = sample_rate / 1000.0;
         let mut sample_idx: usize = 0;
         let mut events_map: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::new();
 
         for (idx, event) in pattern.events.clone().into_iter().enumerate() {
-            match event.action {
-                EventType::NoteEvent(note) => {
-                    events_map.insert(
-                        sample_idx,
-                        vec![SimpleNoteEvent {
-                            note_type: NoteType::On,
-                            timing: sample_idx as u32,
-                            voice_id: None,
-                            channel: 1,
-                            note: note.note_num,
-                            velocity: note.velocity,
-                        }],
-                    );
-                    let note_off_timing = (sample_idx
-                        + ((samples_per_milli as f64) * (note.dur_ms as f64)) as usize)
-                        as u32;
-
-                    events_map.insert(
-                        note_off_timing as usize,
-                        vec![SimpleNoteEvent {
-                            note_type: NoteType::Off,
-                            timing: note_off_timing,
-                            voice_id: None,
-                            channel: 1,
-                            note: note.note_num,
-                            velocity: 0.0,
-                        }],
-                    );
-                }
-                EventType::Rest => {
-                    events_map.insert(
-                        sample_idx,
-                        vec![SimpleNoteEvent {
-                            note_type: NoteType::Rest,
-                            timing: sample_idx as u32,
-                            voice_id: None,
-                            channel: 1,
-                            note: 0,
-                            velocity: 0.0,
-                        }],
-                    );
-                }
-            }
+            insert_event(&mut events_map, &event, sample_rate, sample_idx);
             sample_idx +=
                 ((tick_length_samples * event.dur_frac.num) + extra_samples[idx]) as usize;
         }
@@ -212,7 +221,13 @@ impl PrecisePattern {
                 Some(events) => {
                     events.into_iter().for_each(|ev| match ev.note_type {
                         NoteType::Rest => {}
-                        NoteType::Off => {}
+                        NoteType::Off => {
+                            self.notes_playing.remove(&(
+                                ev.channel,
+                                ev.note,
+                                ev.voice_id.unwrap_or(0) as u8,
+                            ));
+                        }
                         NoteType::On => {
                             self.notes_playing
                                 .insert((ev.channel, ev.note, ev.voice_id.unwrap_or(0) as u8), ());

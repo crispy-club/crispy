@@ -46,17 +46,24 @@ impl Live {
             nih_log!("recomputing patterns after tempo change");
             self.recompute_patterns(context);
         }
-        let mut precise_patterns = self.precise_patterns.clone();
-
-        for precise_pattern in precise_patterns.values_mut() {
-            if !precise_pattern.playing {
-                continue;
-            }
-            for event in precise_pattern.get_events(pos_samples, pos_samples + buffer.samples()) {
-                self.send(context, event);
-            }
+        for event in self.get_events(pos_samples, buffer.samples()) {
+            self.send(context, event);
         }
         ProcessStatus::Normal
+    }
+
+    fn get_events(&mut self, buf_size: usize, pos_samples: usize) -> Vec<SimpleNoteEvent> {
+        return self
+            .precise_patterns
+            .values_mut()
+            .into_iter()
+            .map(move |precise_pattern| {
+                precise_pattern
+                    .get_events(pos_samples, pos_samples + buf_size)
+                    .into_iter()
+            })
+            .flatten()
+            .collect();
     }
 
     fn recompute_patterns(&mut self, context: &mut impl ProcessContext<Self>) {
@@ -332,3 +339,20 @@ impl Vst3Plugin for Live {
 
 nih_export_clap!(Live);
 nih_export_vst3!(Live);
+
+// #[cfg(test)]
+// mod tests {
+//     use crate::plugin::Live;
+//     use nih_plug::prelude::*;
+
+//     #[test]
+//     fn test_plugin_initialize() -> Result<(), String> {
+//         let _plugin: Live = Default::default();
+//         assert!(_plugin.initialize(
+//             &AudioIOLayout{},
+//             &BufferConfig{},
+//             &mut impl InitContext<Self>{},
+//         ));
+//         Ok(())
+//     }
+// }
