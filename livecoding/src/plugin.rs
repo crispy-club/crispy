@@ -46,7 +46,9 @@ impl Live {
             nih_log!("recomputing patterns after tempo change");
             self.recompute_patterns(context);
         }
-        for precise_pattern in self.precise_patterns.values() {
+        let mut precise_patterns = self.precise_patterns.clone();
+
+        for precise_pattern in precise_patterns.values_mut() {
             if !precise_pattern.playing {
                 continue;
             }
@@ -133,8 +135,15 @@ impl Live {
                 events: named_pattern.events.clone(),
             },
         );
-        self.precise_patterns
+        let prev_pattern = self
+            .precise_patterns
             .insert(named_pattern.name.clone(), precise_pattern.clone());
+        if let Some(mut pattern) = prev_pattern {
+            let notes_playing = pattern.get_notes_playing();
+            notes_playing.into_iter().for_each(|nev| {
+                self.send(context, nev);
+            });
+        }
         Ok(())
     }
 

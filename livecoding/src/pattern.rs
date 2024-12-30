@@ -181,7 +181,7 @@ impl PrecisePattern {
         };
     }
 
-    pub fn get_events(&self, start: usize, end: usize) -> Vec<SimpleNoteEvent> {
+    pub fn get_events(&mut self, start: usize, end: usize) -> Vec<SimpleNoteEvent> {
         if self.length_samples == 0 || !self.playing {
             return vec![];
         }
@@ -198,7 +198,7 @@ impl PrecisePattern {
     }
 
     pub fn get_events_adj(
-        &self,
+        &mut self,
         adj_start: usize,
         adj_end: usize,
         timing_offset: usize,
@@ -210,6 +210,14 @@ impl PrecisePattern {
                 None => (),
                 // Need to adjust the timing so that it is relative to the current audio buffer.
                 Some(events) => {
+                    events.into_iter().for_each(|ev| match ev.note_type {
+                        NoteType::Rest => {}
+                        NoteType::Off => {}
+                        NoteType::On => {
+                            self.notes_playing
+                                .insert((ev.channel, ev.note, ev.voice_id.unwrap_or(0) as u8), ());
+                        }
+                    });
                     note_events.extend(events.into_iter().cloned().map(|ev| SimpleNoteEvent {
                         note_type: ev.note_type,
                         timing: ((ev.timing as usize) - adj_start + timing_offset) as u32,
@@ -222,6 +230,23 @@ impl PrecisePattern {
             };
         }
         note_events
+    }
+
+    pub fn get_notes_playing(&mut self) -> Vec<SimpleNoteEvent> {
+        let notes_playing = self
+            .notes_playing
+            .keys()
+            .map(|k| SimpleNoteEvent {
+                note_type: NoteType::Off,
+                timing: 0,
+                voice_id: Some(k.2 as i32),
+                channel: k.0,
+                note: k.1,
+                velocity: 0.0,
+            })
+            .collect();
+        self.notes_playing = HashMap::new();
+        notes_playing
     }
 }
 
@@ -265,7 +290,8 @@ mod tests {
         };
         let sample_rate = 48000 as f32;
         let tempo = 110 as f64;
-        let precise_pattern = PrecisePattern::from(&mut pattern.clone(), sample_rate, tempo, true);
+        let mut precise_pattern =
+            PrecisePattern::from(&mut pattern.clone(), sample_rate, tempo, true);
         let buffer_size_samples = 256 as usize;
         let expectations: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::from([
             (
