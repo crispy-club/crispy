@@ -130,10 +130,6 @@ fn insert_event(
             let note_length_samples = (note.dur.num * event_length_samples) / note.dur.den;
             let note_off_timing = ((sample_idx as i64) + note_length_samples) as u32;
 
-            println!(
-                "note_off_timing {:?} note_length_samples {:?}",
-                note_off_timing, note_length_samples
-            );
             events_map.insert(
                 note_off_timing as usize,
                 vec![SimpleNoteEvent {
@@ -179,19 +175,6 @@ impl PrecisePattern {
 
         let mut sample_idx: usize = 0;
         let mut events_map: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::new();
-
-        println!(
-            "samples_per_bar {:?} least_common_multiple {:?}",
-            samples_per_bar, least_common_multiple
-        );
-        println!(
-            "pattern_length_samples {:?} tick_length_samples {:?}",
-            pattern_length_samples, tick_length_samples
-        );
-        println!(
-            "samples_remainder {:?} extra_samples {:?}",
-            samples_remainder, extra_samples
-        );
 
         for (idx, event) in pattern.events.clone().into_iter().enumerate() {
             insert_event(&mut events_map, &event, tick_length_samples, sample_idx);

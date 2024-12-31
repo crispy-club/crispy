@@ -52,7 +52,7 @@ impl Live {
         ProcessStatus::Normal
     }
 
-    fn get_events(&mut self, buf_size: usize, pos_samples: usize) -> Vec<SimpleNoteEvent> {
+    fn get_events(&mut self, pos_samples: usize, buf_size: usize) -> Vec<SimpleNoteEvent> {
         return self
             .precise_patterns
             .values_mut()
