@@ -42,6 +42,7 @@ jobs:
           rustup component add llvm-tools-preview
           cargo test --package livecoding
           cargo install grcov
+          mkdir -p target/coverage
           grcov . --binary-path ./target/debug/deps/ -s . -t lcov --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/tests.lcov
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
