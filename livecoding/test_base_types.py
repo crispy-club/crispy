@@ -42,18 +42,18 @@ def test_duration_str() -> None:
 
 def test_event_json() -> None:
     ev = Event(
-        action=Note(Note.Params(note_num=60, velocity=0.7, dur_ms=20)),
-        dur_frac=Duration(1, 4),
+        action=Note(Note.Params(note_num=60, velocity=0.7, dur=Duration(1, 2))),
+        dur=Duration(1, 4),
     )
     assert (
         ev.json()
-        == """{"action":{"NoteEvent":{"note_num":60,"velocity":0.7,"dur_ms":20}},"dur_frac":{"num":1,"den":4}}"""
+        == """{"action":{"NoteEvent":{"note_num":60,"velocity":0.7,"dur":{"num":1,"den":2}}},"dur":{"num":1,"den":4}}"""
     )
 
 
 def test_note_eq() -> None:
-    n1 = Note(Note.Params(36, 0.8, 20))
-    n2 = Note(Note.Params(36, 0.8, 20))
+    n1 = Note(Note.Params(36, 0.8, Duration(1, 4)))
+    n2 = Note(Note.Params(36, 0.8, Duration(1, 4)))
     assert n1 == n2
 
 
@@ -66,17 +66,20 @@ def test_note_json() -> None:
         Note.Params(
             note_num=60,
             velocity=0.9,
-            dur_ms=20,
+            dur=Duration(1, 2),
         ),
     )
-    assert note.json() == """{"NoteEvent":{"note_num":60,"velocity":0.9,"dur_ms":20}}"""
+    assert (
+        note.json()
+        == """{"NoteEvent":{"note_num":60,"velocity":0.9,"dur":{"num":1,"den":2}}}"""
+    )
 
 
 def test_pattern_json() -> None:
     pattern = note_pattern("foo", "[c3]")
     assert (
         pattern.json()
-        == """{"events":[{"action":{"NoteEvent":{"note_num":60,"velocity":0.8,"dur_ms":20}},"dur_frac":{"num":1,"den":1}}],"length_bars":{"num":1,"den":1},"name":"foo"}"""
+        == """{"events":[{"action":{"NoteEvent":{"note_num":60,"velocity":0.8,"dur":{"num":1,"den":2}}},"dur":{"num":1,"den":1}}],"length_bars":{"num":1,"den":1},"name":"foo"}"""
     )
 
 

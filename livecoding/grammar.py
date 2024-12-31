@@ -80,24 +80,26 @@ def _get_events(
         if isinstance(child, int):
             events.append(
                 Event(
-                    action=Note(Note.Params(child, default_velocity, 20)),
-                    dur_frac=each_dur,
+                    action=Note(Note.Params(child, default_velocity, Duration(1, 2))),
+                    dur=each_dur,
                 )
-            )  # Need to be smarter about dur_ms
+            )
         elif isinstance(child, tuple):
             assert len(child) == 2
             events.append(
                 Event(
-                    action=Note(Note.Params(child[0], child[1], 20)),
-                    dur_frac=each_dur,
+                    action=Note(Note.Params(child[0], child[1], Duration(1, 2))),
+                    dur=each_dur,
                 )
             )
         elif isinstance(child, NoteRepeated):
             for note_num in child.value:
                 events.append(
                     Event(
-                        action=Note(Note.Params(note_num, default_velocity, 20)),
-                        dur_frac=each_dur / len(child.value),
+                        action=Note(
+                            Note.Params(note_num, default_velocity, Duration(1, 2))
+                        ),
+                        dur=each_dur / len(child.value),
                     )
                 )
         elif isinstance(child, str):
@@ -105,7 +107,7 @@ def _get_events(
             events.append(
                 Event(
                     action="Rest",
-                    dur_frac=each_dur,
+                    dur=each_dur,
                 )
             )
     return events

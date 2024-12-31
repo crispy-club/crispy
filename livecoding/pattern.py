@@ -34,9 +34,7 @@ class tran:
         if event.action == "Rest":
             return event
         assert isinstance(event.action, Note)
-        return Event(
-            dur_frac=event.dur_frac, action=event.action.transpose(self.amount)
-        )
+        return Event(dur=event.dur, action=event.action.transpose(self.amount))
 
 
 @define
@@ -56,14 +54,14 @@ class rot:
 def _right_clip(length_bars: Duration, events: list[Event]) -> list[Event]:
     running_total = Duration(0, 1)
     for idx, event in enumerate(events):
-        running_total += event.dur_frac
+        running_total += event.dur
         if running_total == length_bars:
             if idx < len(events):
                 return events[: idx + 1]
             return events
         elif running_total > length_bars:
             remainder = running_total - length_bars
-            return events[:idx] + [Event(action=events[idx].action, dur_frac=remainder)]
+            return events[:idx] + [Event(action=events[idx].action, dur=remainder)]
     return events
 
 
@@ -132,7 +130,7 @@ class resize:
             events=[
                 Event(
                     action=ev.action,
-                    dur_frac=ev.dur_frac * self.scalar,
+                    dur=ev.dur * self.scalar,
                 )
                 for ev in pattern.events
             ],
