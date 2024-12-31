@@ -2,29 +2,29 @@ use num::integer::lcm;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct Note {
-    pub note_num: u8,
-    pub dur_ms: i64,
-    pub velocity: f32,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub enum EventType {
-    Rest,
-    NoteEvent(Note),
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct FractionalDuration {
     pub num: i64,
     pub den: i64,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Note {
+    pub note_num: u8,
+    pub dur: FractionalDuration,
+    pub velocity: f32,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+pub enum EventType {
+    Rest,
+    NoteEvent(Note),
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Event {
     pub action: EventType,
-    pub dur_frac: FractionalDuration,
+    pub dur: FractionalDuration,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -39,7 +39,7 @@ impl Pattern {
             .events
             .clone()
             .into_iter()
-            .map(|event| event.dur_frac.den)
+            .map(|event| event.dur.den)
             .reduce(|acc, e| lcm(acc, e))
             .unwrap();
         self.events = self
@@ -48,9 +48,9 @@ impl Pattern {
             .into_iter()
             .map(|event| {
                 let mut clone = event.clone();
-                let multiplier = least_common_multiple / event.dur_frac.den;
-                clone.dur_frac = FractionalDuration {
-                    num: event.dur_frac.num * multiplier,
+                let multiplier = least_common_multiple / event.dur.den;
+                clone.dur = FractionalDuration {
+                    num: event.dur.num * multiplier,
                     den: least_common_multiple,
                 };
                 clone
@@ -110,11 +110,9 @@ pub fn compute_extra_samples(samples_remainder: i64, num_events: usize) -> Vec<i
 fn insert_event(
     events_map: &mut HashMap<usize, Vec<SimpleNoteEvent>>,
     event: &Event,
-    sample_rate: f32,
+    tick_length_samples: i64,
     sample_idx: usize,
 ) {
-    let samples_per_milli = sample_rate / 1000.0;
-
     match event.action {
         EventType::NoteEvent(note) => {
             events_map.insert(
@@ -128,9 +126,14 @@ fn insert_event(
                     velocity: note.velocity,
                 }],
             );
-            let note_off_timing =
-                (sample_idx + ((samples_per_milli as f64) * (note.dur_ms as f64)) as usize) as u32;
+            let event_length_samples = event.dur.num * tick_length_samples;
+            let note_length_samples = (note.dur.num * event_length_samples) / note.dur.den;
+            let note_off_timing = ((sample_idx as i64) + note_length_samples) as u32;
 
+            println!(
+                "note_off_timing {:?} note_length_samples {:?}",
+                note_off_timing, note_length_samples
+            );
             events_map.insert(
                 note_off_timing as usize,
                 vec![SimpleNoteEvent {
@@ -177,10 +180,22 @@ impl PrecisePattern {
         let mut sample_idx: usize = 0;
         let mut events_map: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::new();
 
+        println!(
+            "samples_per_bar {:?} least_common_multiple {:?}",
+            samples_per_bar, least_common_multiple
+        );
+        println!(
+            "pattern_length_samples {:?} tick_length_samples {:?}",
+            pattern_length_samples, tick_length_samples
+        );
+        println!(
+            "samples_remainder {:?} extra_samples {:?}",
+            samples_remainder, extra_samples
+        );
+
         for (idx, event) in pattern.events.clone().into_iter().enumerate() {
-            insert_event(&mut events_map, &event, sample_rate, sample_idx);
-            sample_idx +=
-                ((tick_length_samples * event.dur_frac.num) + extra_samples[idx]) as usize;
+            insert_event(&mut events_map, &event, tick_length_samples, sample_idx);
+            sample_idx += ((tick_length_samples * event.dur.num) + extra_samples[idx]) as usize;
         }
         return PrecisePattern {
             events: events_map,
@@ -274,6 +289,38 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
+    fn test_fractional_duration_clone() {
+        let dur = FractionalDuration { num: 1, den: 4 };
+        let clone = dur.clone();
+        assert_eq!(dur, clone);
+    }
+
+    #[test]
+    fn test_note_clone() {
+        let note = Note {
+            note_num: 60,
+            velocity: 0.5,
+            dur: FractionalDuration { num: 1, den: 4 },
+        };
+        let clone = note.clone();
+        assert_eq!(note, clone);
+    }
+
+    #[test]
+    fn test_event_clone() {
+        let event = Event {
+            action: EventType::NoteEvent(Note {
+                note_num: 60,
+                velocity: 0.5,
+                dur: FractionalDuration { num: 1, den: 4 },
+            }),
+            dur: FractionalDuration { num: 1, den: 2 },
+        };
+        let clone = event.clone();
+        assert_eq!(event, clone);
+    }
+
+    #[test]
     fn test_compute_extra_samples() -> Result<(), String> {
         let extra_samples = compute_extra_samples(37, 5);
         assert_eq!(extra_samples, vec![8, 8, 7, 7, 7]);
@@ -289,17 +336,17 @@ mod tests {
                     action: EventType::NoteEvent(Note {
                         note_num: 60,
                         velocity: 0.8,
-                        dur_ms: 20,
+                        dur: FractionalDuration { num: 1, den: 4 },
                     }),
-                    dur_frac: FractionalDuration { num: 1, den: 2 },
+                    dur: FractionalDuration { num: 1, den: 2 },
                 },
                 Event {
                     action: EventType::NoteEvent(Note {
                         note_num: 96,
                         velocity: 0.8,
-                        dur_ms: 20,
+                        dur: FractionalDuration { num: 1, den: 4 },
                     }),
-                    dur_frac: FractionalDuration { num: 1, den: 2 },
+                    dur: FractionalDuration { num: 1, den: 2 },
                 },
             ],
         };
@@ -321,10 +368,10 @@ mod tests {
                 }],
             ),
             (
-                3,
+                25,
                 vec![SimpleNoteEvent {
                     note_type: NoteType::Off,
-                    timing: 192,
+                    timing: 145,
                     voice_id: None,
                     channel: 1,
                     note: 60,
@@ -343,16 +390,17 @@ mod tests {
                 }],
             ),
             (
-                106,
+                127,
                 vec![SimpleNoteEvent {
                     note_type: NoteType::Off,
-                    timing: 6,
+                    timing: 215,
                     voice_id: None,
                     channel: 1,
                     note: 96,
                     velocity: 0.0,
                 }],
             ),
+            // Add this last one to see how the code behaves when the pattern loops.
             (
                 204,
                 vec![SimpleNoteEvent {
@@ -365,11 +413,21 @@ mod tests {
                 }],
             ),
         ]);
-        for (bufnum, expected_events) in expectations.into_iter() {
+        let max_buf_num = *expectations.keys().max().unwrap();
+
+        for bufnum in 0..(max_buf_num + 1) {
+            let expected_events_opt = expectations.get(&bufnum);
             let buffer_start_samples = bufnum * buffer_size_samples;
             let buffer_end_samples = buffer_start_samples + buffer_size_samples;
             let events = precise_pattern.get_events(buffer_start_samples, buffer_end_samples);
-            assert_eq!(expected_events, events);
+            match expected_events_opt {
+                Some(expected_events) => {
+                    assert_eq!(*expected_events, events);
+                }
+                None => {
+                    assert_eq!(events.len(), 0);
+                }
+            }
         }
         Ok(())
     }

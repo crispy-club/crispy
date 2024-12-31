@@ -20,17 +20,17 @@ class Melody:
 class Perc:
     def parse_event(self, word: str, note_num: int) -> Event:
         if word == ".":
-            return Event(action="Rest", dur_frac=Duration(num=1, den=16))
+            return Event(action="Rest", dur=Duration(num=1, den=16))
         elif word == "X":
             return Event(
                 action=Note(
                     Note.Params(
                         note_num=note_num,
                         velocity=0.9,
-                        dur_ms=20,
+                        dur=Duration(1, 2),
                     ),
                 ),
-                dur_frac=Duration(num=1, den=16),
+                dur=Duration(num=1, den=16),
             )
         elif word == "x":
             return Event(
@@ -38,10 +38,10 @@ class Perc:
                     Note.Params(
                         note_num=note_num,
                         velocity=0.4,
-                        dur_ms=20,
+                        dur=Duration(1, 2),
                     ),
                 ),
-                dur_frac=Duration(num=1, den=16),
+                dur=Duration(num=1, den=16),
             )
         else:
             raise ValueError(f"unsupported notation: {word}")

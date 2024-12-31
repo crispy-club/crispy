@@ -23,20 +23,20 @@ def test_note_pattern_simple() -> None:
         length_bars=Duration(1, 1),
         events=[
             Event(
-                action=Note(Note.Params(note_num=36, velocity=0.8, dur_ms=20)),
-                dur_frac=Duration(1, 4),
+                action=Note(Note.Params(note_num=36, velocity=0.8, dur=Duration(1, 2))),
+                dur=Duration(1, 4),
             ),
             Event(
-                action=Note(Note.Params(note_num=39, velocity=0.8, dur_ms=20)),
-                dur_frac=Duration(1, 4),
+                action=Note(Note.Params(note_num=39, velocity=0.8, dur=Duration(1, 2))),
+                dur=Duration(1, 4),
             ),
             Event(
-                action=Note(Note.Params(note_num=43, velocity=0.8, dur_ms=20)),
-                dur_frac=Duration(1, 4),
+                action=Note(Note.Params(note_num=43, velocity=0.8, dur=Duration(1, 2))),
+                dur=Duration(1, 4),
             ),
             Event(
-                action=Note(Note.Params(note_num=48, velocity=0.8, dur_ms=20)),
-                dur_frac=Duration(1, 4),
+                action=Note(Note.Params(note_num=48, velocity=0.8, dur=Duration(1, 2))),
+                dur=Duration(1, 4),
             ),
         ],
     )
@@ -50,28 +50,28 @@ def test_note_pattern_nested() -> None:
         length_bars=Duration(1, 1),
         events=[
             Event(
-                action=Note(Note.Params(note_num=36, velocity=0.8, dur_ms=20)),
-                dur_frac=Duration(1, 4),
+                action=Note(Note.Params(note_num=36, velocity=0.8, dur=Duration(1, 2))),
+                dur=Duration(1, 4),
             ),
             Event(
-                action=Note(Note.Params(note_num=39, velocity=0.8, dur_ms=20)),
-                dur_frac=Duration(1, 12),
+                action=Note(Note.Params(note_num=39, velocity=0.8, dur=Duration(1, 2))),
+                dur=Duration(1, 12),
             ),
             Event(
-                action=Note(Note.Params(note_num=36, velocity=0.8, dur_ms=20)),
-                dur_frac=Duration(1, 12),
+                action=Note(Note.Params(note_num=36, velocity=0.8, dur=Duration(1, 2))),
+                dur=Duration(1, 12),
             ),
             Event(
-                action=Note(Note.Params(note_num=39, velocity=0.8, dur_ms=20)),
-                dur_frac=Duration(1, 12),
+                action=Note(Note.Params(note_num=39, velocity=0.8, dur=Duration(1, 2))),
+                dur=Duration(1, 12),
             ),
             Event(
-                action=Note(Note.Params(note_num=43, velocity=0.8, dur_ms=20)),
-                dur_frac=Duration(1, 4),
+                action=Note(Note.Params(note_num=43, velocity=0.8, dur=Duration(1, 2))),
+                dur=Duration(1, 4),
             ),
             Event(
-                action=Note(Note.Params(note_num=48, velocity=0.8, dur_ms=20)),
-                dur_frac=Duration(1, 4),
+                action=Note(Note.Params(note_num=48, velocity=0.8, dur=Duration(1, 2))),
+                dur=Duration(1, 4),
             ),
         ],
     )

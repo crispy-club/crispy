@@ -20,12 +20,12 @@ def test_pattern_with_velocity() -> None:
         length_bars=Bar,
         events=[
             Event(
-                action=Note(Note.Params(note_num=48, velocity=0.8, dur_ms=20)),
-                dur_frac=Bar / 2,
+                action=Note(Note.Params(note_num=48, velocity=0.8, dur=Duration(1, 2))),
+                dur=Bar / 2,
             ),
             Event(
-                action=Note(Note.Params(note_num=55, velocity=0.7, dur_ms=20)),
-                dur_frac=Bar / 2,
+                action=Note(Note.Params(note_num=55, velocity=0.7, dur=Duration(1, 2))),
+                dur=Bar / 2,
             ),
         ],
     )
@@ -38,12 +38,12 @@ def test_pattern_with_rest() -> None:
         length_bars=Bar,
         events=[
             Event(
-                action=Note(Note.Params(note_num=48, velocity=0.8, dur_ms=20)),
-                dur_frac=Bar / 2,
+                action=Note(Note.Params(note_num=48, velocity=0.8, dur=Duration(1, 2))),
+                dur=Bar / 2,
             ),
             Event(
                 action="Rest",
-                dur_frac=Bar / 2,
+                dur=Bar / 2,
             ),
         ],
     )

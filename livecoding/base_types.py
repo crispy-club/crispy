@@ -121,7 +121,7 @@ class Note:
     class Params:
         note_num: int
         velocity: float
-        dur_ms: int
+        dur: Duration
 
     NoteEvent: Params
 
@@ -135,7 +135,7 @@ class Note:
             [
                 getattr(self.NoteEvent, attr_name)
                 == getattr(other.NoteEvent, attr_name)
-                for attr_name in {"dur_ms", "note_num", "velocity"}
+                for attr_name in {"dur", "note_num", "velocity"}
             ]
         )
 
@@ -147,7 +147,7 @@ class Note:
             self.Params(
                 note_num=(self.NoteEvent.note_num + amount) % 128,
                 velocity=self.NoteEvent.velocity,
-                dur_ms=self.NoteEvent.dur_ms,
+                dur=self.NoteEvent.dur,
             ),
         )
 
@@ -155,7 +155,7 @@ class Note:
 @define
 class Event:
     action: Rest | Note
-    dur_frac: Duration
+    dur: Duration
 
     def json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))

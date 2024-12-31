@@ -87,13 +87,15 @@ def test_nested_pattern_with_notes_and_velocities() -> None:
 
 def test_nested_pattern_with_notes_and_velocities_and_newlines() -> None:
     parser = get_pattern_parser()
-    tree = parser.parse("""
+    tree = parser.parse(
+        """
     [
       c1
       [c1,0.8 d#1,0.75 d1,0.85 d#1]
       g1,0.4
       c2,0.6
-    ]""")
+    ]"""
+    )
     assert get_transformer().transform(tree) == Tree(
         Token("RULE", "pattern"),
         [
