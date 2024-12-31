@@ -2,26 +2,26 @@ use num::integer::lcm;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct FractionalDuration {
     pub num: i64,
     pub den: i64,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Note {
     pub note_num: u8,
     pub dur: FractionalDuration,
     pub velocity: f32,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub enum EventType {
     Rest,
     NoteEvent(Note),
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Event {
     pub action: EventType,
     pub dur: FractionalDuration,
@@ -287,6 +287,38 @@ mod tests {
         PrecisePattern, SimpleNoteEvent,
     };
     use std::collections::HashMap;
+
+    #[test]
+    fn test_fractional_duration_clone() {
+        let dur = FractionalDuration { num: 1, den: 4 };
+        let clone = dur.clone();
+        assert_eq!(dur, clone);
+    }
+
+    #[test]
+    fn test_note_clone() {
+        let note = Note {
+            note_num: 60,
+            velocity: 0.5,
+            dur: FractionalDuration { num: 1, den: 4 },
+        };
+        let clone = note.clone();
+        assert_eq!(note, clone);
+    }
+
+    #[test]
+    fn test_event_clone() {
+        let event = Event {
+            action: EventType::NoteEvent(Note {
+                note_num: 60,
+                velocity: 0.5,
+                dur: FractionalDuration { num: 1, den: 4 },
+            }),
+            dur: FractionalDuration { num: 1, den: 2 },
+        };
+        let clone = event.clone();
+        assert_eq!(event, clone);
+    }
 
     #[test]
     fn test_compute_extra_samples() -> Result<(), String> {
