@@ -24,7 +24,7 @@ def lark_ebnf() -> str:
          | pair
          | pair_repeated
 
-    rest: "."
+    rest: "~"
 
     !note: {notes}
 

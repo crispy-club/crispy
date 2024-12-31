@@ -32,7 +32,7 @@ def test_pattern_with_velocity() -> None:
 
 
 def test_pattern_with_rest() -> None:
-    res = note_pattern("foo", "[c2,0.8 .]")
+    res = note_pattern("foo", "[c2,0.8 ~]")
     assert res == NotePattern(
         name="foo",
         length_bars=Bar,
@@ -77,8 +77,8 @@ def test_transpose() -> None:
     assert note_pattern("foo", "[c3 e3 g3]") | tran(7) == note_pattern(
         "foo", "[g3 b3 d4]"
     )
-    assert note_pattern("foo", "[c4 . g4]") | tran(12) == note_pattern(
-        "foo", "[c5 . g5]"
+    assert note_pattern("foo", "[c4 ~ g4]") | tran(12) == note_pattern(
+        "foo", "[c5 ~ g5]"
     )
 
 
