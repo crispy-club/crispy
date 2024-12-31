@@ -15,13 +15,14 @@ pub struct Note {
     pub velocity: f32,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum EventType {
     Rest,
     NoteEvent(Note),
+    MultiNoteEvent(Vec<Note>),
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Event {
     pub action: EventType,
     pub dur: FractionalDuration,
@@ -107,40 +108,55 @@ pub fn compute_extra_samples(samples_remainder: i64, num_events: usize) -> Vec<i
     extra_samples
 }
 
+fn insert_note(
+    events_map: &mut HashMap<usize, Vec<SimpleNoteEvent>>,
+    event: &Event,
+    note: &Note,
+    tick_length_samples: i64,
+    sample_idx: usize,
+) {
+    events_map.insert(
+        sample_idx,
+        vec![SimpleNoteEvent {
+            note_type: NoteType::On,
+            timing: sample_idx as u32,
+            voice_id: None,
+            channel: 1,
+            note: note.note_num,
+            velocity: note.velocity,
+        }],
+    );
+    let event_length_samples = event.dur.num * tick_length_samples;
+    let note_length_samples = (note.dur.num * event_length_samples) / note.dur.den;
+    let note_off_timing = ((sample_idx as i64) + note_length_samples) as u32;
+
+    events_map.insert(
+        note_off_timing as usize,
+        vec![SimpleNoteEvent {
+            note_type: NoteType::Off,
+            timing: note_off_timing,
+            voice_id: None,
+            channel: 1,
+            note: note.note_num,
+            velocity: 0.0,
+        }],
+    );
+}
+
 fn insert_event(
     events_map: &mut HashMap<usize, Vec<SimpleNoteEvent>>,
     event: &Event,
     tick_length_samples: i64,
     sample_idx: usize,
 ) {
-    match event.action {
+    match &event.action {
+        EventType::MultiNoteEvent(notes) => {
+            for note in notes {
+                insert_note(events_map, event, &note, tick_length_samples, sample_idx);
+            }
+        }
         EventType::NoteEvent(note) => {
-            events_map.insert(
-                sample_idx,
-                vec![SimpleNoteEvent {
-                    note_type: NoteType::On,
-                    timing: sample_idx as u32,
-                    voice_id: None,
-                    channel: 1,
-                    note: note.note_num,
-                    velocity: note.velocity,
-                }],
-            );
-            let event_length_samples = event.dur.num * tick_length_samples;
-            let note_length_samples = (note.dur.num * event_length_samples) / note.dur.den;
-            let note_off_timing = ((sample_idx as i64) + note_length_samples) as u32;
-
-            events_map.insert(
-                note_off_timing as usize,
-                vec![SimpleNoteEvent {
-                    note_type: NoteType::Off,
-                    timing: note_off_timing,
-                    voice_id: None,
-                    channel: 1,
-                    note: note.note_num,
-                    velocity: 0.0,
-                }],
-            );
+            insert_note(events_map, event, &note, tick_length_samples, sample_idx);
         }
         EventType::Rest => {
             events_map.insert(
