@@ -1,8 +1,11 @@
+import functools
+import itertools
+import operator
 from collections import deque
 
 from attrs import define
 
-from livecoding.base_types import Duration, Event, Note, NotePattern
+from livecoding.base_types import Duration, Event, Note, NotePattern, NotePatternFilter
 
 
 @define
@@ -146,4 +149,28 @@ class name:
             name=self.new_name,
             length_bars=pattern.length_bars,
             events=pattern.events,
+        )
+
+
+@define
+class revery:
+    n: int
+    filt: NotePatternFilter
+
+    def __call__(self, pattern: NotePattern) -> NotePattern:
+        assert self.n > 1
+        return functools.reduce(
+            operator.add, itertools.repeat(pattern, self.n - 1)
+        ) + self.filt(pattern)
+
+
+@define
+class levery:
+    n: int
+    filt: NotePatternFilter
+
+    def __call__(self, pattern: NotePattern) -> NotePattern:
+        assert self.n > 1
+        return self.filt(pattern) + functools.reduce(
+            operator.add, itertools.repeat(pattern, self.n - 1)
         )

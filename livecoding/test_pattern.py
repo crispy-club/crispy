@@ -2,7 +2,19 @@ import functools
 import operator
 
 from livecoding.base_types import Bar, Duration, Event, Note, NotePattern
-from livecoding.pattern import rev, rot, tran, lclip, rclip, ladd, radd, resize, name
+from livecoding.pattern import (
+    rev,
+    rot,
+    tran,
+    lclip,
+    rclip,
+    ladd,
+    radd,
+    resize,
+    name,
+    revery,
+    levery,
+)
 from livecoding.plugin import note_pattern
 
 
@@ -157,3 +169,15 @@ def test_name() -> None:
     assert note_pattern("foo", "[c3 d3 e3 g3]") | name("baz") == note_pattern(
         "baz", "[c3 d3 e3 g3]"
     )
+
+
+def test_revery() -> None:
+    assert note_pattern("foo", "[c3 d3 e3 g3]") | revery(2, rev) == note_pattern(
+        "foo", "[c3 d3 e3 g3]"
+    ) + note_pattern("foo", "[g3 e3 d3 c3]")
+
+
+def test_levery() -> None:
+    assert note_pattern("foo", "[c3 d3 e3 g3]") | levery(2, rev) == note_pattern(
+        "foo", "[g3 e3 d3 c3]"
+    ) + note_pattern("foo", "[c3 d3 e3 g3]")

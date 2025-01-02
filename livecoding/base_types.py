@@ -161,6 +161,9 @@ class Event:
         return json.dumps(asdict(self), separators=(",", ":"))
 
 
+NotePatternFilter = Callable[["NotePattern"], "NotePattern"]
+
+
 @define
 class NotePattern:
     events: list[Event]
@@ -182,9 +185,7 @@ class NotePattern:
             name=self.name,
         )
 
-    def __or__(
-        self, pattern_filter: Callable[["NotePattern"], "NotePattern"]
-    ) -> "NotePattern":
+    def __or__(self, pattern_filter: NotePatternFilter) -> "NotePattern":
         return pattern_filter(self)
 
     def json(self) -> str:
