@@ -2,6 +2,7 @@ import itertools
 
 from attrs import define
 from lark import Lark, Token, Transformer, Tree
+from wonderwords import RandomWord, Defaults
 
 from livecoding.base_types import Duration, Event, Note, NotePattern, Rest
 from livecoding.notes import NoteNumbers
@@ -56,11 +57,16 @@ def get_pattern_parser() -> Lark:
 _LEAF_TYPE = int | tuple[int, int]
 
 
+def _random_name() -> str:
+    adj, noun = RandomWord(adj=Defaults.ADJECTIVES), RandomWord(adj=Defaults.NOUNS)
+    return f"{adj.word()}-{noun.word()}"
+
+
 def get_note_pattern(
-    name: str, length_bars: Duration, tree: Tree[_LEAF_TYPE], default_velocity: float
+    length_bars: Duration, tree: Tree[_LEAF_TYPE], default_velocity: float
 ) -> NotePattern:
     return NotePattern(
-        name=name,
+        name=_random_name(),
         length_bars=length_bars,
         events=_get_events(tree, default_velocity, length_bars),
     )
@@ -153,3 +159,98 @@ def get_transformer() -> PatternTransformer:
     if _TRANSFORMER is None:
         _TRANSFORMER = PatternTransformer()
     return _TRANSFORMER
+
+
+def notes(
+    definition: str,
+    length_bars: Duration = Duration(1, 1),
+    default_velocity: float = 0.8,
+) -> NotePattern:
+    """
+    note_pattern parses the melody DSL, which is very similar in spirit to the
+    tidal cycles "mini notation"
+    """
+    ast = get_pattern_parser().parse(definition)
+    transformer = get_transformer()
+    return get_note_pattern(
+        length_bars=length_bars,
+        tree=transformer.transform(ast),  # type: ignore
+        default_velocity=default_velocity,
+    )
+
+
+@define
+class Perc:
+    @classmethod
+    def parse(cls, line: str) -> NotePattern:
+        note_str, events_str = line.strip().split("=")
+        note_num = NoteNumbers[note_str.strip()]
+        if len(events_str.strip()) == 0:
+            return NotePattern(name="", length_bars=Duration(0, 1), events=[])
+        events = [
+            cls.parse_event(char, note_num)
+            for char in events_str.strip()
+            if not char.isspace()
+        ]
+        return NotePattern(
+            name=note_str.strip(),
+            events=events,
+            length_bars=Duration(len(events), 16),
+        )
+
+    @classmethod
+    def parse_event(cls, word: str, note_num: int) -> Event:
+        if word == ".":
+            return Event(action="Rest", dur=Duration(num=1, den=16))
+        elif word == "X":
+            return Event(
+                action=Note(
+                    Note.Params(
+                        note_num=note_num,
+                        velocity=0.9,
+                        dur=Duration(1, 2),
+                    ),
+                ),
+                dur=Duration(num=1, den=16),
+            )
+        elif word == "x":
+            return Event(
+                action=Note(
+                    Note.Params(
+                        note_num=note_num,
+                        velocity=0.4,
+                        dur=Duration(1, 2),
+                    ),
+                ),
+                dur=Duration(num=1, den=16),
+            )
+        elif word == "_":
+            return Event(
+                action="Tie",
+                dur=Duration(num=1, den=16),
+            )
+        else:
+            raise ValueError(f"unsupported notation: {word}")
+
+    @classmethod
+    def usage(cls) -> str:
+        return "NOTE = [Xx_.]"
+
+
+def perc(
+    definition: str,
+) -> list[NotePattern]:
+    """
+    perc_pattern parses a DSL that is geared towards linear sequencing
+    of individual notes.
+    """
+    try:
+        return [
+            Perc.parse(line.strip())
+            for line in definition.split("\n")
+            if len(line.strip()) > 0
+        ]
+    except ValueError as ex:
+        print(f"could not parse pattern: {ex}")
+        print(f"expected line format: {Perc.usage()}")
+        raise ex

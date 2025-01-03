@@ -10,6 +10,8 @@ from .base_types import (
 from .grammar import (
     get_pattern_parser as get_pattern_parser,
     lark_ebnf as lark_ebnf,
+    notes as notes,
+    perc as perc,
 )
 from .notes import NoteNumbers as NoteNumbers
 from .pattern import (
@@ -23,4 +25,4 @@ from .pattern import (
     resize as resize,
     name as name,
 )
-from .plugin import note_pattern as note_pattern, play as play, stop as stop
+from .plugin import play as play, stop as stop

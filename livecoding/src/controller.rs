@@ -25,10 +25,20 @@ pub async fn start_pattern(
 ) -> response::Result<String, StatusCode> {
     let mut cmds = controller.commands.lock().unwrap();
     // TODO: handle when the queue is full
-    let named_pattern = NamedPattern {
-        name: pattern_name,
-        events: pattern.events,
-        length_bars: pattern.length_bars,
+
+    let named_pattern = match pattern.channel {
+        Some(channel) => NamedPattern {
+            channel: channel,
+            name: pattern_name,
+            events: pattern.events,
+            length_bars: pattern.length_bars,
+        },
+        None => NamedPattern {
+            channel: 1,
+            name: pattern_name,
+            events: pattern.events,
+            length_bars: pattern.length_bars,
+        },
     };
     match cmds.push(Command::PatternStart(named_pattern)) {
         Ok(_) => Ok(String::from("ok")),

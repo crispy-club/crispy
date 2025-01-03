@@ -2,10 +2,12 @@ import json
 from math import gcd, lcm
 from typing import Callable, Literal, Union, overload
 
+import requests
 from attrs import asdict, define
 
 
 Rest = Literal["Rest"]
+Tie = Literal["Tie"]
 
 
 @define
@@ -154,7 +156,7 @@ class Note:
 
 @define
 class Event:
-    action: Rest | Note
+    action: Note | Rest | Tie
     dur: Duration
 
     def json(self) -> str:
@@ -166,15 +168,15 @@ NotePatternFilter = Callable[["NotePattern"], "NotePattern"]
 
 @define
 class NotePattern:
+    name: str
     events: list[Event]
     length_bars: Duration
-    name: str
 
     def __add__(self, other: "NotePattern") -> "NotePattern":
         return NotePattern(
+            name=self.name,
             events=self.events + other.events,
             length_bars=self.length_bars + other.length_bars,
-            name=self.name,
         )
 
     def __mul__(self, times: int) -> "NotePattern":
@@ -190,3 +192,7 @@ class NotePattern:
 
     def json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))
+
+    def stop(self) -> None:
+        resp = requests.post(f"http://127.0.0.1:3000/stop/{self.name}")
+        resp.raise_for_status()

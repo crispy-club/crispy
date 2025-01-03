@@ -178,14 +178,14 @@ impl Live {
             NoteType::On => context.send_event(NoteEvent::NoteOn {
                 timing: sev.timing,
                 voice_id: sev.voice_id,
-                channel: sev.channel,
+                channel: sev.channel - 1,
                 note: sev.note,
                 velocity: sev.velocity,
             }),
             NoteType::Off => context.send_event(NoteEvent::NoteOff {
                 timing: sev.timing,
                 voice_id: sev.voice_id,
-                channel: sev.channel,
+                channel: sev.channel - 1,
                 note: sev.note,
                 velocity: 0.0,
             }),
