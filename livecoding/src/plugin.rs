@@ -128,6 +128,7 @@ impl Live {
             .or(Some(FractionalDuration { num: 1, den: 1 }));
         let precise_pattern = PrecisePattern::from(
             &mut Pattern {
+                channel: Some(named_pattern.channel),
                 length_bars: pattern_length,
                 events: named_pattern.events.clone(),
             },
@@ -138,6 +139,7 @@ impl Live {
         self.patterns.insert(
             named_pattern.name.clone(),
             Pattern {
+                channel: Some(named_pattern.channel),
                 length_bars: pattern_length,
                 events: named_pattern.events.clone(),
             },

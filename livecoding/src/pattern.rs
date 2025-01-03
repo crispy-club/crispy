@@ -331,6 +331,7 @@ mod tests {
     #[test]
     fn test_precise_pattern() -> Result<(), String> {
         let pattern = Pattern {
+            channel: Some(1),
             length_bars: Some(FractionalDuration { num: 1, den: 2 }),
             events: vec![
                 Event {
