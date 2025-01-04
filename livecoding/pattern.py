@@ -81,11 +81,12 @@ class Perc:
             self.previous_event.dur += Sixteenth
             return None
         else:
-            raise ValueError(f"unsupported notation: {word}")
+            raise ValueError(
+                f"unsupported notation: {word} (line format is {self.usage()})"
+            )
         self.previous_event = event
         return event
 
-    @classmethod
     def usage(cls) -> str:
         return "NOTE = [Xx_.]"
 
@@ -97,13 +98,13 @@ def perc(
     perc_pattern parses a DSL that is geared towards linear sequencing
     of individual notes.
     """
-    perc = Perc()
+    _perc = Perc()
 
     try:
-        return perc.parse(definition)
+        return _perc.parse(definition)
     except ValueError as ex:
         print(f"could not parse pattern: {ex}")
-        print(f"expected line format: {Perc.usage()}")
+        print(f"expected line format: {_perc.usage()}")
         raise ex
 
 
@@ -158,9 +159,7 @@ def _right_clip(length_bars: Duration, events: list[Event]) -> list[Event]:
     for idx, event in enumerate(events):
         running_total += event.dur
         if running_total == length_bars:
-            if idx < len(events):
-                return events[: idx + 1]
-            return events
+            return events[: idx + 1]
         elif running_total > length_bars:
             remainder = running_total - length_bars
             return events[:idx] + [Event(action=events[idx].action, dur=remainder)]

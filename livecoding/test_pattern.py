@@ -10,6 +10,7 @@ from livecoding.base_types import (
     Half,
     Note,
     NotePattern,
+    Quarter,
     Sixteenth,
     Zero,
 )
@@ -153,6 +154,12 @@ def test_lclip() -> None:
     ) | name("foo")
 
 
+def test_lclip_zero() -> None:
+    assert notes("[c3 d3 e3 f3 g3]", length_bars=Quarter * 5) | lclip(Zero) | name(
+        "foo"
+    ) == notes("[c3 d3 e3 f3 g3]", length_bars=Quarter * 5) | name("foo")
+
+
 def test_ladd() -> None:
     assert notes("[c3 d3 e3 g3]") | ladd(notes("[c3 d3 e3 g3]") | tran(12)) | name(
         "foo"
@@ -265,4 +272,4 @@ def test_perc_broken_notation() -> None:
     with pytest.raises(ValueError) as ex:
         perc.parse("c1 = foo")
 
-    assert str(ex.value) == "unsupported notation: f"
+    assert str(ex.value) == "unsupported notation: f (line format is NOTE = [Xx_.])"
