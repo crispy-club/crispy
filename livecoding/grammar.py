@@ -20,12 +20,15 @@ def lark_ebnf() -> str:
 
     event: pattern
          | rest
+         | rest_repeated
          | note
          | note_repeated
          | pair
          | pair_repeated
 
     rest: "~"
+
+    rest_repeated: rest INT
 
     !note: {notes}
 
@@ -108,6 +111,14 @@ def _get_events(
                         dur=each_dur / len(child.value),
                     )
                 )
+        elif isinstance(child, RestRepeated):
+            for _ in range(child.repeats):
+                events.append(
+                    Event(
+                        action="Rest",
+                        dur=each_dur / len(child.value),
+                    )
+                )
         elif isinstance(child, str):
             assert child == "Rest"
             events.append(
@@ -124,11 +135,20 @@ class NoteRepeated:
     value: list[int]
 
 
+@define
+class RestRepeated:
+    repeats: int
+
+
 # Seems like mypy doesn't care about the second generic type for Transformer.
 # You can change it from int to something else and mypy doesn't complain.
 class PatternTransformer(Transformer[Token, _LEAF_TYPE]):
     def rest(self, value: str) -> Rest:
         return "Rest"
+
+    def rest_repeated(self, value: str) -> RestRepeated:
+        print(f"value ->")
+        return RestRepeated(repeats=int(value[1:]))
 
     def note(self, value: list[str]) -> int:
         assert len(value) == 1
@@ -136,8 +156,6 @@ class PatternTransformer(Transformer[Token, _LEAF_TYPE]):
         return NoteNumbers[value[0]]
 
     def note_repeated(self, value: tuple[int, Token]) -> NoteRepeated:
-        print(f"value {value}")
-        print(f"type(value) {type(value)}")
         return NoteRepeated(list(itertools.repeat(int(value[0]), int(value[1].value))))
 
     def velocity(self, value: list[str]) -> float:

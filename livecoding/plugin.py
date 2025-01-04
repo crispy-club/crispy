@@ -19,6 +19,9 @@ class Channel:
     def __lshift__(self, pattern: NotePattern) -> None:
         play(pattern | name(f"ch{self.n}"), channel=self.n)
 
+    def stop(self) -> None:
+        stop(f"ch{self.n}")
+
 
 ch1 = Channel(1)
 ch2 = Channel(2)
