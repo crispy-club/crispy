@@ -128,6 +128,7 @@ impl Live {
             .or(Some(FractionalDuration { num: 1, den: 1 }));
         let precise_pattern = PrecisePattern::from(
             &mut Pattern {
+                channel: Some(named_pattern.channel),
                 length_bars: pattern_length,
                 events: named_pattern.events.clone(),
             },
@@ -138,6 +139,7 @@ impl Live {
         self.patterns.insert(
             named_pattern.name.clone(),
             Pattern {
+                channel: Some(named_pattern.channel),
                 length_bars: pattern_length,
                 events: named_pattern.events.clone(),
             },
@@ -151,6 +153,11 @@ impl Live {
                 self.send(context, nev);
             });
         }
+        nih_log!(
+            "started pattern {} on channel {}",
+            named_pattern.name,
+            named_pattern.channel
+        );
         Ok(())
     }
 
@@ -160,36 +167,60 @@ impl Live {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         let transport = context.transport();
-
         self.playing = true;
-
         nih_log!(
             "starting live (sample rate {}) (tempo {})",
             transport.sample_rate,
             transport.tempo.unwrap_or(120.0),
         );
         self.play(buffer, context);
-
         return ProcessStatus::Normal;
     }
 
     fn send(&self, context: &mut impl ProcessContext<Self>, sev: SimpleNoteEvent) -> () {
         match sev.note_type {
-            NoteType::On => context.send_event(NoteEvent::NoteOn {
-                timing: sev.timing,
-                voice_id: sev.voice_id,
-                channel: sev.channel,
-                note: sev.note,
-                velocity: sev.velocity,
-            }),
+            NoteType::On => {
+                nih_log!("note {} played on channel {}", sev.note, sev.channel - 1);
+                context.send_event(NoteEvent::NoteOn {
+                    timing: sev.timing,
+                    voice_id: sev.voice_id,
+                    channel: sev.channel - 1,
+                    note: sev.note,
+                    velocity: sev.velocity,
+                })
+            }
             NoteType::Off => context.send_event(NoteEvent::NoteOff {
                 timing: sev.timing,
                 voice_id: sev.voice_id,
-                channel: sev.channel,
+                channel: sev.channel - 1,
                 note: sev.note,
                 velocity: 0.0,
             }),
             NoteType::Rest => {}
+        }
+    }
+
+    fn stop(
+        &mut self,
+        _buffer: &mut Buffer,
+        context: &mut impl ProcessContext<Self>,
+    ) -> ProcessStatus {
+        self.playing = false;
+        nih_log!("turning all notes off");
+        self.turn_all_notes_off(context);
+        return ProcessStatus::Normal;
+    }
+
+    fn turn_all_notes_off(&mut self, context: &mut impl ProcessContext<Self>) -> () {
+        for event in self
+            .precise_patterns
+            .values_mut()
+            .into_iter()
+            .map(move |ppat| ppat.get_notes_playing().into_iter())
+            .flatten()
+            .collect::<Vec<SimpleNoteEvent>>()
+        {
+            self.send(context, event);
         }
     }
 }
@@ -218,6 +249,13 @@ impl Default for LiveParams {
     fn default() -> Self {
         Self {}
     }
+}
+
+pub fn create_router(commands: Arc<Controller>) -> Router {
+    return Router::new()
+        .route("/start/:pattern_name", post(start_pattern))
+        .route("/stop/:pattern_name", post(stop_pattern))
+        .with_state(commands);
 }
 
 impl Plugin for Live {
@@ -270,10 +308,7 @@ impl Plugin for Live {
         self.responses_tx = Some(responses_tx);
 
         thread::spawn(move || {
-            let app = Router::new()
-                .route("/start/:pattern_name", post(start_pattern))
-                .route("/stop/:pattern_name", post(stop_pattern))
-                .with_state(commands);
+            let router = create_router(commands);
 
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -284,7 +319,7 @@ impl Plugin for Live {
                 let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
                     .await
                     .unwrap();
-                axum::serve(listener, app)
+                axum::serve(listener, router)
                     .with_graceful_shutdown(async move { shutdown_rx.await.ok().unwrap() })
                     .await
                     .unwrap();
@@ -309,7 +344,9 @@ impl Plugin for Live {
                 self.play(buffer, context);
             }
         } else {
-            self.playing = false;
+            if self.playing {
+                self.stop(buffer, context);
+            }
         }
         self.tempo_prev_cycle = tempo;
 
@@ -317,10 +354,10 @@ impl Plugin for Live {
     }
 
     fn deactivate(&mut self) -> () {
+        nih_log!("shutting down http thread...");
         if let Some(sender) = self.shutdown_tx.take() {
             sender.send(()).expect("Failed to send shutdown signal");
         }
-        nih_log!("deactivating...");
     }
 }
 
@@ -340,19 +377,35 @@ impl Vst3Plugin for Live {
 nih_export_clap!(Live);
 nih_export_vst3!(Live);
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::plugin::Live;
-//     use nih_plug::prelude::*;
+#[cfg(test)]
+mod tests {
+    use crate::plugin::Live;
+    use nih_plug::prelude::*;
 
-//     #[test]
-//     fn test_plugin_initialize() -> Result<(), String> {
-//         let _plugin: Live = Default::default();
-//         assert!(_plugin.initialize(
-//             &AudioIOLayout{},
-//             &BufferConfig{},
-//             &mut impl InitContext<Self>{},
-//         ));
-//         Ok(())
-//     }
-// }
+    struct FakeInitContext;
+
+    impl<P: Plugin> InitContext<P> for FakeInitContext {
+        fn plugin_api(&self) -> PluginApi {
+            PluginApi::Clap
+        }
+        fn execute(&self, _task: P::BackgroundTask) {}
+        fn set_latency_samples(&self, _samples: u32) {}
+        fn set_current_voice_capacity(&self, _capacity: u32) {}
+    }
+
+    #[test]
+    fn test_plugin_initialize() -> Result<(), String> {
+        let mut plugin: Live = Default::default();
+        assert!(plugin.initialize(
+            &AudioIOLayout::default(),
+            &BufferConfig {
+                sample_rate: 48000 as f32,
+                min_buffer_size: Some(256),
+                max_buffer_size: 4096,
+                process_mode: ProcessMode::Realtime,
+            },
+            &mut FakeInitContext {},
+        ));
+        Ok(())
+    }
+}

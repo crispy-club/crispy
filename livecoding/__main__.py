@@ -3,64 +3,18 @@ import sys
 import click
 from attrs import define
 
-from livecoding.base_types import Duration, Event, Note, NotePattern
-from livecoding.grammar import lark_ebnf
+from livecoding.base_types import NotePattern
+from livecoding.grammar import lark_ebnf, notes
 from livecoding.notes import NoteNumbers
-from livecoding.plugin import note_pattern, play, stop
+from livecoding.pattern import name, perc
+from livecoding.plugin import play, stop
 
 
 @define
 class Melody:
     def parse(self, line: str) -> NotePattern:
-        name, definition = line.strip().split("=")
-        return note_pattern(name.strip(), definition)
-
-
-@define
-class Perc:
-    def parse_event(self, word: str, note_num: int) -> Event:
-        if word == ".":
-            return Event(action="Rest", dur=Duration(num=1, den=16))
-        elif word == "X":
-            return Event(
-                action=Note(
-                    Note.Params(
-                        note_num=note_num,
-                        velocity=0.9,
-                        dur=Duration(1, 2),
-                    ),
-                ),
-                dur=Duration(num=1, den=16),
-            )
-        elif word == "x":
-            return Event(
-                action=Note(
-                    Note.Params(
-                        note_num=note_num,
-                        velocity=0.4,
-                        dur=Duration(1, 2),
-                    ),
-                ),
-                dur=Duration(num=1, den=16),
-            )
-        else:
-            raise ValueError(f"unsupported notation: {word}")
-
-    def parse(self, line: str) -> NotePattern:
-        note_str, events_str = line.strip().split("=")
-        note_num = NoteNumbers[note_str.strip()]
-        if len(events_str.strip()) == 0:
-            return NotePattern(name="", length_bars=Duration(0, 1), events=[])
-        events = [
-            self.parse_event(char, note_num)
-            for char in events_str.strip()
-            if not char.isspace()
-        ]
-        return NotePattern(
-            name=note_str.strip(),
-            events=events,
-            length_bars=Duration(len(events), 16),
-        )
+        _name, definition = line.strip().split("=")
+        return notes(definition) | name(_name.strip())
 
 
 @click.group
@@ -87,13 +41,8 @@ def silence(name: str | None, notes: bool) -> None:
 
 
 @cli.command()
-def perc() -> None:
-    perc = Perc()
-    for line in map(lambda ln: ln.strip(), sys.stdin):
-        pattern = perc.parse(line)
-        if len(pattern.events) == 0:
-            continue
-        play(pattern)
+def percussion() -> None:
+    play(*perc(sys.stdin.read()))
 
 
 @cli.command()

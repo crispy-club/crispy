@@ -1,8 +1,6 @@
-# import functools
-
 from livecoding.base_types import Bar, Duration, Event, Note
-from livecoding.pattern import resize
-from livecoding.plugin import note_pattern
+from livecoding.grammar import notes
+from livecoding.pattern import name, resize
 
 
 def test_duration_add() -> None:
@@ -76,19 +74,19 @@ def test_note_json() -> None:
 
 
 def test_pattern_json() -> None:
-    pattern = note_pattern("foo", "[c3]")
+    pattern = notes("[c3]") | name("foo")
     assert (
         pattern.json()
-        == """{"events":[{"action":{"NoteEvent":{"note_num":60,"velocity":0.8,"dur":{"num":1,"den":2}}},"dur":{"num":1,"den":1}}],"length_bars":{"num":1,"den":1},"name":"foo"}"""
+        == """{"name":"foo","events":[{"action":{"NoteEvent":{"note_num":60,"velocity":0.8,"dur":{"num":1,"den":2}}},"dur":{"num":1,"den":1}}],"length_bars":{"num":1,"den":1}}"""
     )
 
 
 def test_pattern_add() -> None:
-    note_pattern("foo", "[c3]") + note_pattern("bar", "[e3]") == (
-        note_pattern("foo", "[c3 e3]") | resize(Bar * 2)
+    (notes("[c3]") + notes("[e3]")) | name("foo") == (
+        notes("[c3 e3]") | resize(Bar * 2) | name("foo")
     )
 
 
 def test_pattern_mul() -> None:
-    foo = note_pattern("foo", "[c3]")
-    assert foo * 3 == note_pattern("foo", "[c3 c3 c3]") | resize(Bar * 3)
+    foo = notes("[c3]") | name("foo")
+    assert foo * 3 == (notes("[c3 c3 c3]") | resize(Bar * 3) | name("foo"))

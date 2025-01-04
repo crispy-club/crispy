@@ -1,5 +1,13 @@
+import json
+from unittest import mock
+
+import pytest
+from requests.exceptions import HTTPError
+
 from livecoding.base_types import Duration, Event, Note, NotePattern
-from livecoding.plugin import note_pattern
+from livecoding.grammar import notes
+from livecoding.pattern import name
+from livecoding.plugin import ch2, play
 
 
 def test_livecoding_duration_addition() -> None:
@@ -15,8 +23,8 @@ def test_livecoding_duration_division() -> None:
     assert Duration(1, 16) / Duration(2, 3) == Duration(3, 32)
 
 
-def test_note_pattern_simple() -> None:
-    pattern = note_pattern("bassline", "[c1 d#1 g1 c2]")
+def test_notes_simple() -> None:
+    pattern = notes("[c1 d#1 g1 c2]") | name("bassline")
     print(pattern)
     assert pattern == NotePattern(
         name="bassline",
@@ -42,8 +50,8 @@ def test_note_pattern_simple() -> None:
     )
 
 
-def test_note_pattern_nested() -> None:
-    pattern = note_pattern("bassline", "[c1 [d#1 c1 d#1] g1 c2]")
+def test_notes_nested() -> None:
+    pattern = notes("[c1 [d#1 c1 d#1] g1 c2]") | name("bassline")
     print(pattern)
     assert pattern == NotePattern(
         name="bassline",
@@ -74,4 +82,57 @@ def test_note_pattern_nested() -> None:
                 dur=Duration(1, 4),
             ),
         ],
+    )
+
+
+@mock.patch("requests.post")
+def test_plugin_play_note_pattern_error(mock_post: mock.Mock) -> None:
+    mock_resp = mock.Mock()
+    mock_resp.status_code = 422
+    mock_resp.raise_for_status = mock.Mock()
+    mock_resp.raise_for_status.side_effect = HTTPError("invalid pattern")
+    mock_post.return_value = mock_resp
+
+    with pytest.raises(HTTPError) as herr:
+        play(notes("[c1 [d#1 c1 d#1] g1 c2]") | name("bassline"))
+
+    assert str(herr.value) == "invalid pattern"
+
+
+@mock.patch("requests.post")
+def test_plugin_play_note_pattern_on_channel2(mock_post: mock.Mock) -> None:
+    mock_resp = mock.Mock()
+    mock_resp.status_code = 201
+    mock_post.return_value = mock_resp
+    ch2 << (notes("[c1 g1]") | name("bassline"))
+    mock_post.assert_called_with(
+        "http://127.0.0.1:3000/start/ch2",
+        headers={"Content-Type": "application/json"},
+        data=json.dumps(
+            {
+                "events": [
+                    {
+                        "action": {
+                            "NoteEvent": {
+                                "note_num": 36,
+                                "velocity": 0.8,
+                                "dur": {"num": 1, "den": 2},
+                            },
+                        },
+                        "dur": {"num": 1, "den": 2},
+                    },
+                    {
+                        "action": {
+                            "NoteEvent": {
+                                "note_num": 43,
+                                "velocity": 0.8,
+                                "dur": {"num": 1, "den": 2},
+                            },
+                        },
+                        "dur": {"num": 1, "den": 2},
+                    },
+                ],
+                "channel": 2,
+            }
+        ),
     )

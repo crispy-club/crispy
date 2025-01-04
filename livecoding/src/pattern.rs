@@ -30,6 +30,7 @@ pub struct Event {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Pattern {
+    pub channel: Option<u8>,
     pub events: Vec<Event>,
     pub length_bars: Option<FractionalDuration>,
 }
@@ -61,8 +62,9 @@ impl Pattern {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct NamedPattern {
+    pub channel: u8,
     pub events: Vec<Event>,
     pub length_bars: Option<FractionalDuration>,
     pub name: String,
@@ -112,16 +114,21 @@ fn insert_note(
     events_map: &mut HashMap<usize, Vec<SimpleNoteEvent>>,
     event: &Event,
     note: &Note,
+    channel: Option<u8>,
     tick_length_samples: i64,
     sample_idx: usize,
 ) {
+    let note_channel: u8 = match channel {
+        None => 1,
+        Some(ch) => ch,
+    };
     events_map.insert(
         sample_idx,
         vec![SimpleNoteEvent {
             note_type: NoteType::On,
             timing: sample_idx as u32,
             voice_id: None,
-            channel: 1,
+            channel: note_channel,
             note: note.note_num,
             velocity: note.velocity,
         }],
@@ -136,7 +143,7 @@ fn insert_note(
             note_type: NoteType::Off,
             timing: note_off_timing,
             voice_id: None,
-            channel: 1,
+            channel: note_channel,
             note: note.note_num,
             velocity: 0.0,
         }],
@@ -146,17 +153,32 @@ fn insert_note(
 fn insert_event(
     events_map: &mut HashMap<usize, Vec<SimpleNoteEvent>>,
     event: &Event,
+    channel: Option<u8>,
     tick_length_samples: i64,
     sample_idx: usize,
 ) {
     match &event.action {
         EventType::MultiNoteEvent(notes) => {
             for note in notes {
-                insert_note(events_map, event, &note, tick_length_samples, sample_idx);
+                insert_note(
+                    events_map,
+                    event,
+                    &note,
+                    channel,
+                    tick_length_samples,
+                    sample_idx,
+                );
             }
         }
         EventType::NoteEvent(note) => {
-            insert_note(events_map, event, &note, tick_length_samples, sample_idx);
+            insert_note(
+                events_map,
+                event,
+                &note,
+                channel,
+                tick_length_samples,
+                sample_idx,
+            );
         }
         EventType::Rest => {
             events_map.insert(
@@ -193,7 +215,13 @@ impl PrecisePattern {
         let mut events_map: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::new();
 
         for (idx, event) in pattern.events.clone().into_iter().enumerate() {
-            insert_event(&mut events_map, &event, tick_length_samples, sample_idx);
+            insert_event(
+                &mut events_map,
+                &event,
+                pattern.channel,
+                tick_length_samples,
+                sample_idx,
+            );
             sample_idx += ((tick_length_samples * event.dur.num) + extra_samples[idx]) as usize;
         }
         return PrecisePattern {
@@ -329,6 +357,7 @@ mod tests {
     #[test]
     fn test_precise_pattern() -> Result<(), String> {
         let pattern = Pattern {
+            channel: Some(1),
             length_bars: Some(FractionalDuration { num: 1, den: 2 }),
             events: vec![
                 Event {

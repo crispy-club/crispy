@@ -2,6 +2,7 @@ import itertools
 
 from attrs import define
 from lark import Lark, Token, Transformer, Tree
+from wonderwords import RandomWord, Defaults
 
 from livecoding.base_types import Duration, Event, Note, NotePattern, Rest
 from livecoding.notes import NoteNumbers
@@ -19,12 +20,15 @@ def lark_ebnf() -> str:
 
     event: pattern
          | rest
+         | rest_repeated
          | note
          | note_repeated
          | pair
          | pair_repeated
 
     rest: "~"
+
+    rest_repeated: rest INT
 
     !note: {notes}
 
@@ -56,11 +60,16 @@ def get_pattern_parser() -> Lark:
 _LEAF_TYPE = int | tuple[int, int]
 
 
+def _random_name() -> str:
+    adj, noun = RandomWord(adj=Defaults.ADJECTIVES), RandomWord(adj=Defaults.NOUNS)
+    return f"{adj.word()}-{noun.word()}"
+
+
 def get_note_pattern(
-    name: str, length_bars: Duration, tree: Tree[_LEAF_TYPE], default_velocity: float
+    length_bars: Duration, tree: Tree[_LEAF_TYPE], default_velocity: float
 ) -> NotePattern:
     return NotePattern(
-        name=name,
+        name=_random_name(),
         length_bars=length_bars,
         events=_get_events(tree, default_velocity, length_bars),
     )
@@ -102,6 +111,14 @@ def _get_events(
                         dur=each_dur / len(child.value),
                     )
                 )
+        elif isinstance(child, RestRepeated):
+            for _ in range(child.repeats):
+                events.append(
+                    Event(
+                        action="Rest",
+                        dur=each_dur / child.repeats,
+                    )
+                )
         elif isinstance(child, str):
             assert child == "Rest"
             events.append(
@@ -118,11 +135,20 @@ class NoteRepeated:
     value: list[int]
 
 
+@define
+class RestRepeated:
+    repeats: int
+
+
 # Seems like mypy doesn't care about the second generic type for Transformer.
 # You can change it from int to something else and mypy doesn't complain.
 class PatternTransformer(Transformer[Token, _LEAF_TYPE]):
     def rest(self, value: str) -> Rest:
         return "Rest"
+
+    def rest_repeated(self, value: list[str]) -> RestRepeated:
+        assert len(value) == 2
+        return RestRepeated(repeats=int(value[1]))
 
     def note(self, value: list[str]) -> int:
         assert len(value) == 1
@@ -130,8 +156,6 @@ class PatternTransformer(Transformer[Token, _LEAF_TYPE]):
         return NoteNumbers[value[0]]
 
     def note_repeated(self, value: tuple[int, Token]) -> NoteRepeated:
-        print(f"value {value}")
-        print(f"type(value) {type(value)}")
         return NoteRepeated(list(itertools.repeat(int(value[0]), int(value[1].value))))
 
     def velocity(self, value: list[str]) -> float:
@@ -153,3 +177,21 @@ def get_transformer() -> PatternTransformer:
     if _TRANSFORMER is None:
         _TRANSFORMER = PatternTransformer()
     return _TRANSFORMER
+
+
+def notes(
+    definition: str,
+    length_bars: Duration = Duration(1, 1),
+    default_velocity: float = 0.8,
+) -> NotePattern:
+    """
+    note_pattern parses the melody DSL, which is very similar in spirit to the
+    tidal cycles "mini notation"
+    """
+    ast = get_pattern_parser().parse(definition)
+    transformer = get_transformer()
+    return get_note_pattern(
+        length_bars=length_bars,
+        tree=transformer.transform(ast),  # type: ignore
+        default_velocity=default_velocity,
+    )
