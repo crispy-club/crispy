@@ -106,7 +106,7 @@ def test_plugin_play_note_pattern_on_channel2(mock_post: mock.Mock) -> None:
     mock_post.return_value = mock_resp
     ch2 << (notes("[c1 g1]") | name("bassline"))
     mock_post.assert_called_with(
-        "http://127.0.0.1:3000/start/bassline",
+        "http://127.0.0.1:3000/start/ch2",
         headers={"Content-Type": "application/json"},
         data=json.dumps(
             {

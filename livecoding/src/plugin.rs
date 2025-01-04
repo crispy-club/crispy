@@ -153,6 +153,11 @@ impl Live {
                 self.send(context, nev);
             });
         }
+        nih_log!(
+            "started pattern {} on channel {}",
+            named_pattern.name,
+            named_pattern.channel
+        );
         Ok(())
     }
 
@@ -162,28 +167,28 @@ impl Live {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         let transport = context.transport();
-
         self.playing = true;
-
         nih_log!(
             "starting live (sample rate {}) (tempo {})",
             transport.sample_rate,
             transport.tempo.unwrap_or(120.0),
         );
         self.play(buffer, context);
-
         return ProcessStatus::Normal;
     }
 
     fn send(&self, context: &mut impl ProcessContext<Self>, sev: SimpleNoteEvent) -> () {
         match sev.note_type {
-            NoteType::On => context.send_event(NoteEvent::NoteOn {
-                timing: sev.timing,
-                voice_id: sev.voice_id,
-                channel: sev.channel - 1,
-                note: sev.note,
-                velocity: sev.velocity,
-            }),
+            NoteType::On => {
+                nih_log!("note {} played on channel {}", sev.note, sev.channel - 1);
+                context.send_event(NoteEvent::NoteOn {
+                    timing: sev.timing,
+                    voice_id: sev.voice_id,
+                    channel: sev.channel - 1,
+                    note: sev.note,
+                    velocity: sev.velocity,
+                })
+            }
             NoteType::Off => context.send_event(NoteEvent::NoteOff {
                 timing: sev.timing,
                 voice_id: sev.voice_id,
@@ -192,6 +197,30 @@ impl Live {
                 velocity: 0.0,
             }),
             NoteType::Rest => {}
+        }
+    }
+
+    fn stop(
+        &mut self,
+        _buffer: &mut Buffer,
+        context: &mut impl ProcessContext<Self>,
+    ) -> ProcessStatus {
+        self.playing = false;
+        nih_log!("turning all notes off");
+        self.turn_all_notes_off(context);
+        return ProcessStatus::Normal;
+    }
+
+    fn turn_all_notes_off(&mut self, context: &mut impl ProcessContext<Self>) -> () {
+        for event in self
+            .precise_patterns
+            .values_mut()
+            .into_iter()
+            .map(move |ppat| ppat.get_notes_playing().into_iter())
+            .flatten()
+            .collect::<Vec<SimpleNoteEvent>>()
+        {
+            self.send(context, event);
         }
     }
 }
@@ -311,7 +340,9 @@ impl Plugin for Live {
                 self.play(buffer, context);
             }
         } else {
-            self.playing = false;
+            if self.playing {
+                self.stop(buffer, context);
+            }
         }
         self.tempo_prev_cycle = tempo;
 
@@ -319,10 +350,10 @@ impl Plugin for Live {
     }
 
     fn deactivate(&mut self) -> () {
+        nih_log!("shutting down http thread...");
         if let Some(sender) = self.shutdown_tx.take() {
             sender.send(()).expect("Failed to send shutdown signal");
         }
-        nih_log!("deactivating...");
     }
 }
 

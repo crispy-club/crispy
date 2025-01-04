@@ -5,6 +5,7 @@ import requests
 from attrs import asdict, define
 
 from livecoding.base_types import NotePattern
+from livecoding.pattern import name
 
 
 @define
@@ -16,7 +17,7 @@ class Channel:
     n: int
 
     def __lshift__(self, pattern: NotePattern) -> None:
-        play(pattern, channel=self.n)
+        play(pattern | name(f"ch{self.n}"), channel=self.n)
 
 
 ch1 = Channel(1)
@@ -59,3 +60,4 @@ def _play(pattern: NotePattern, channel: int | None = None) -> None:
         data=data,
     )
     resp.raise_for_status()
+    print(pattern.name)
