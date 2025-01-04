@@ -74,6 +74,28 @@ def test_pattern_with_rest() -> None:
     )
 
 
+def test_pattern_with_rest_repeated() -> None:
+    res = notes("[c2,0.8 ~2]") | name("foo")
+    assert res == NotePattern(
+        name="foo",
+        length_bars=Bar,
+        events=[
+            Event(
+                action=Note(Note.Params(note_num=48, velocity=0.8, dur=Duration(1, 2))),
+                dur=Bar / 2,
+            ),
+            Event(
+                action="Rest",
+                dur=Bar / 4,
+            ),
+            Event(
+                action="Rest",
+                dur=Bar / 4,
+            ),
+        ],
+    )
+
+
 def test_add_sequence_of_patterns() -> None:
     res = functools.reduce(
         operator.add,

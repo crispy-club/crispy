@@ -116,7 +116,7 @@ def _get_events(
                 events.append(
                     Event(
                         action="Rest",
-                        dur=each_dur / len(child.value),
+                        dur=each_dur / child.repeats,
                     )
                 )
         elif isinstance(child, str):
@@ -146,9 +146,9 @@ class PatternTransformer(Transformer[Token, _LEAF_TYPE]):
     def rest(self, value: str) -> Rest:
         return "Rest"
 
-    def rest_repeated(self, value: str) -> RestRepeated:
-        print(f"value ->")
-        return RestRepeated(repeats=int(value[1:]))
+    def rest_repeated(self, value: list[str]) -> RestRepeated:
+        assert len(value) == 2
+        return RestRepeated(repeats=int(value[1]))
 
     def note(self, value: list[str]) -> int:
         assert len(value) == 1
