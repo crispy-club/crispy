@@ -251,6 +251,13 @@ impl Default for LiveParams {
     }
 }
 
+pub fn create_router(commands: Arc<Controller>) -> Router {
+    return Router::new()
+        .route("/start/:pattern_name", post(start_pattern))
+        .route("/stop/:pattern_name", post(stop_pattern))
+        .with_state(commands);
+}
+
 impl Plugin for Live {
     const NAME: &'static str = "LiveCode";
     const VENDOR: &'static str = "Brian Sorahan";
@@ -301,10 +308,7 @@ impl Plugin for Live {
         self.responses_tx = Some(responses_tx);
 
         thread::spawn(move || {
-            let app = Router::new()
-                .route("/start/:pattern_name", post(start_pattern))
-                .route("/stop/:pattern_name", post(stop_pattern))
-                .with_state(commands);
+            let router = create_router(commands);
 
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -315,7 +319,7 @@ impl Plugin for Live {
                 let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
                     .await
                     .unwrap();
-                axum::serve(listener, app)
+                axum::serve(listener, router)
                     .with_graceful_shutdown(async move { shutdown_rx.await.ok().unwrap() })
                     .await
                     .unwrap();
@@ -373,19 +377,35 @@ impl Vst3Plugin for Live {
 nih_export_clap!(Live);
 nih_export_vst3!(Live);
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::plugin::Live;
-//     use nih_plug::prelude::*;
+#[cfg(test)]
+mod tests {
+    use crate::plugin::Live;
+    use nih_plug::prelude::*;
 
-//     #[test]
-//     fn test_plugin_initialize() -> Result<(), String> {
-//         let _plugin: Live = Default::default();
-//         assert!(_plugin.initialize(
-//             &AudioIOLayout{},
-//             &BufferConfig{},
-//             &mut impl InitContext<Self>{},
-//         ));
-//         Ok(())
-//     }
-// }
+    struct FakeInitContext;
+
+    impl<P: Plugin> InitContext<P> for FakeInitContext {
+        fn plugin_api(&self) -> PluginApi {
+            PluginApi::Clap
+        }
+        fn execute(&self, _task: P::BackgroundTask) {}
+        fn set_latency_samples(&self, _samples: u32) {}
+        fn set_current_voice_capacity(&self, _capacity: u32) {}
+    }
+
+    #[test]
+    fn test_plugin_initialize() -> Result<(), String> {
+        let mut plugin: Live = Default::default();
+        assert!(plugin.initialize(
+            &AudioIOLayout::default(),
+            &BufferConfig {
+                sample_rate: 48000 as f32,
+                min_buffer_size: Some(256),
+                max_buffer_size: 4096,
+                process_mode: ProcessMode::Realtime,
+            },
+            &mut FakeInitContext {},
+        ));
+        Ok(())
+    }
+}

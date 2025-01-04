@@ -62,7 +62,7 @@ impl Pattern {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct NamedPattern {
     pub channel: u8,
     pub events: Vec<Event>,
