@@ -4,9 +4,9 @@ import click
 from attrs import define
 
 from livecoding.base_types import NotePattern
-from livecoding.grammar import lark_ebnf, notes, perc
+from livecoding.grammar import lark_ebnf, notes
 from livecoding.notes import NoteNumbers
-from livecoding.pattern import name
+from livecoding.pattern import name, perc
 from livecoding.plugin import play, stop
 
 

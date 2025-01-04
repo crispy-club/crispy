@@ -7,7 +7,6 @@ from attrs import asdict, define
 
 
 Rest = Literal["Rest"]
-Tie = Literal["Tie"]
 
 
 @define
@@ -114,6 +113,10 @@ class Duration:
 
 
 Bar = Duration(1, 1)
+Half = Duration(1, 2)
+Quarter = Duration(1, 4)
+Eighth = Duration(1, 8)
+Sixteenth = Duration(1, 16)
 Zero = Duration(0, 1)
 
 
@@ -156,7 +159,7 @@ class Note:
 
 @define
 class Event:
-    action: Note | Rest | Tie
+    action: Note | Rest
     dur: Duration
 
     def json(self) -> str:

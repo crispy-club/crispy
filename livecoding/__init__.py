@@ -11,7 +11,6 @@ from .grammar import (
     get_pattern_parser as get_pattern_parser,
     lark_ebnf as lark_ebnf,
     notes as notes,
-    perc as perc,
 )
 from .notes import NoteNumbers as NoteNumbers
 from .pattern import (
@@ -24,5 +23,6 @@ from .pattern import (
     tran as tran,
     resize as resize,
     name as name,
+    perc as perc,
 )
 from .plugin import play as play, stop as stop

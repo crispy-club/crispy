@@ -1,8 +1,20 @@
 import functools
 import operator
 
-from livecoding.base_types import Bar, Duration, Event, Note, NotePattern
+import pytest
+
+from livecoding.base_types import (
+    Bar,
+    Duration,
+    Event,
+    Half,
+    Note,
+    NotePattern,
+    Sixteenth,
+    Zero,
+)
 from livecoding.pattern import (
+    Perc,
     rev,
     rot,
     tran,
@@ -172,3 +184,85 @@ def test_levery() -> None:
     assert notes("[c3 d3 e3 g3]") | levery(2, rev) | name("foo") == notes(
         "[g3 e3 d3 c3]"
     ) + notes("[c3 d3 e3 g3]") | name("foo")
+
+
+def test_perc_pattern_single_lane() -> None:
+    perc = Perc()
+    assert perc.parse("c1 = X.") == [
+        NotePattern(
+            name="c1",
+            length_bars=Bar / 8,
+            events=[
+                Event(
+                    action=Note(
+                        Note.Params(
+                            note_num=36,
+                            velocity=0.9,
+                            dur=Duration(1, 2),
+                        )
+                    ),
+                    dur=Duration(1, 16),
+                ),
+                Event(
+                    action="Rest",
+                    dur=Duration(1, 16),
+                ),
+            ],
+        ),
+    ]
+
+
+def test_perc_pattern_tie() -> None:
+    perc = Perc()
+    assert perc.parse("c1 = X++x.") == [
+        NotePattern(
+            name="c1",
+            length_bars=Sixteenth * 5,
+            events=[
+                Event(
+                    action=Note(
+                        Note.Params(
+                            note_num=36,
+                            velocity=0.9,
+                            dur=Half,
+                        )
+                    ),
+                    dur=Sixteenth * 3,
+                ),
+                Event(
+                    action=Note(
+                        Note.Params(
+                            note_num=36,
+                            velocity=0.4,
+                            dur=Half,
+                        )
+                    ),
+                    dur=Sixteenth,
+                ),
+                Event(
+                    action="Rest",
+                    dur=Sixteenth,
+                ),
+            ],
+        ),
+    ]
+
+
+def test_perc_empty_pattern() -> None:
+    perc = Perc()
+    assert perc.parse("c1 = ") == [
+        NotePattern(
+            name="c1",
+            length_bars=Zero,
+            events=[],
+        ),
+    ]
+
+
+def test_perc_broken_notation() -> None:
+    perc = Perc()
+
+    with pytest.raises(ValueError) as ex:
+        perc.parse("c1 = foo")
+
+    assert str(ex.value) == "unsupported notation: f"
