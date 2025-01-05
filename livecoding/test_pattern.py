@@ -9,7 +9,7 @@ from livecoding.base_types import (
     Event,
     Half,
     Note,
-    NotePattern,
+    PluginPattern,
     Quarter,
     Sixteenth,
     Zero,
@@ -32,7 +32,7 @@ from livecoding.grammar import notes
 
 
 def test_empty_pattern() -> None:
-    assert notes("[]") | name("foo") == NotePattern(
+    assert notes("[]") | name("foo") == PluginPattern(
         name="foo",
         length_bars=Bar,
         events=[],
@@ -40,7 +40,7 @@ def test_empty_pattern() -> None:
 
 
 def test_pattern_with_velocity() -> None:
-    assert notes("[c2,0.8 g2,0.7]") | name("foo") == NotePattern(
+    assert notes("[c2,0.8 g2,0.7]") | name("foo") == PluginPattern(
         name="foo",
         length_bars=Bar,
         events=[
@@ -58,7 +58,7 @@ def test_pattern_with_velocity() -> None:
 
 def test_pattern_with_rest() -> None:
     res = notes("[c2,0.8 ~]") | name("foo")
-    assert res == NotePattern(
+    assert res == PluginPattern(
         name="foo",
         length_bars=Bar,
         events=[
@@ -76,7 +76,7 @@ def test_pattern_with_rest() -> None:
 
 def test_pattern_with_rest_repeated() -> None:
     res = notes("[c2,0.8 ~2]") | name("foo")
-    assert res == NotePattern(
+    assert res == PluginPattern(
         name="foo",
         length_bars=Bar,
         events=[
@@ -218,7 +218,7 @@ def test_levery() -> None:
 def test_perc_pattern_single_lane() -> None:
     perc = Perc()
     assert perc.parse("c1 = X.") == [
-        NotePattern(
+        PluginPattern(
             name="c1",
             length_bars=Bar / 8,
             events=[
@@ -244,7 +244,7 @@ def test_perc_pattern_single_lane() -> None:
 def test_perc_pattern_tie() -> None:
     perc = Perc()
     assert perc.parse("c1 = X++x.") == [
-        NotePattern(
+        PluginPattern(
             name="c1",
             length_bars=Sixteenth * 5,
             events=[
@@ -280,7 +280,7 @@ def test_perc_pattern_tie() -> None:
 def test_perc_empty_pattern() -> None:
     perc = Perc()
     assert perc.parse("c1 = ") == [
-        NotePattern(
+        PluginPattern(
             name="c1",
             length_bars=Zero,
             events=[],

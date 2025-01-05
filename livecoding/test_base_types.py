@@ -73,7 +73,15 @@ def test_note_json() -> None:
     )
 
 
-def test_pattern_json() -> None:
+def test_note_pattern_json() -> None:
+    pattern = notes("[c3]") | name("foo")
+    assert (
+        pattern.json()
+        == """{"name":"foo","events":[{"action":{"NoteEvent":{"note_num":60,"velocity":0.8,"dur":{"num":1,"den":2}}},"dur":{"num":1,"den":1}}],"length_bars":{"num":1,"den":1}}"""
+    )
+
+
+def test_ctrl_pattern_json() -> None:
     pattern = notes("[c3]") | name("foo")
     assert (
         pattern.json()

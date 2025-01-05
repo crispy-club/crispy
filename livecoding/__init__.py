@@ -3,7 +3,7 @@ from .base_types import (
     Duration as Duration,
     Event as Event,
     Note as Note,
-    NotePattern as NotePattern,
+    PluginPattern as PluginPattern,
     Rest as Rest,
     Zero as Zero,
 )

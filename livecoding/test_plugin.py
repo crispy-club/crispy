@@ -4,7 +4,7 @@ from unittest import mock
 import pytest
 from requests.exceptions import HTTPError
 
-from livecoding.base_types import Duration, Event, Note, NotePattern
+from livecoding.base_types import Duration, Event, Note, PluginPattern
 from livecoding.grammar import notes
 from livecoding.pattern import name
 from livecoding.plugin import ch2, play
@@ -26,7 +26,7 @@ def test_livecoding_duration_division() -> None:
 def test_notes_simple() -> None:
     pattern = notes("[c1 d#1 g1 c2]") | name("bassline")
     print(pattern)
-    assert pattern == NotePattern(
+    assert pattern == PluginPattern(
         name="bassline",
         length_bars=Duration(1, 1),
         events=[
@@ -53,7 +53,7 @@ def test_notes_simple() -> None:
 def test_notes_nested() -> None:
     pattern = notes("[c1 [d#1 c1 d#1] g1 c2]") | name("bassline")
     print(pattern)
-    assert pattern == NotePattern(
+    assert pattern == PluginPattern(
         name="bassline",
         length_bars=Duration(1, 1),
         events=[

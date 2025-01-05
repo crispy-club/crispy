@@ -3,7 +3,7 @@ import sys
 import click
 from attrs import define
 
-from livecoding.base_types import NotePattern
+from livecoding.base_types import PluginPattern
 from livecoding.grammar import lark_ebnf, notes
 from livecoding.notes import NoteNumbers
 from livecoding.pattern import name, perc
@@ -12,7 +12,7 @@ from livecoding.plugin import play, stop
 
 @define
 class Melody:
-    def parse(self, line: str) -> NotePattern:
+    def parse(self, line: str) -> PluginPattern:
         _name, definition = line.strip().split("=")
         return notes(definition) | name(_name.strip())
 
