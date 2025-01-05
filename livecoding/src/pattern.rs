@@ -15,11 +15,18 @@ pub struct Note {
     pub velocity: f32,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+pub struct CtrlEvent {
+    pub cc: u8,
+    pub value: f32,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum EventType {
     Rest,
     NoteEvent(Note),
     MultiNoteEvent(Vec<Note>),
+    Ctrl(CtrlEvent),
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -87,9 +94,23 @@ pub struct SimpleNoteEvent {
     pub velocity: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SimpleCtrlEvent {
+    pub timing: u32,
+    pub channel: u8,
+    pub cc: u8,
+    pub value: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PreciseEventType {
+    Note(SimpleNoteEvent),
+    Ctrl(SimpleCtrlEvent),
+}
+
 #[derive(Clone)]
 pub struct PrecisePattern {
-    pub events: HashMap<usize, Vec<SimpleNoteEvent>>,
+    pub events: HashMap<usize, Vec<PreciseEventType>>,
     pub length_samples: usize,
     pub playing: bool,
     pub notes_playing: HashMap<(u8, u8, u8), ()>,
@@ -111,7 +132,7 @@ pub fn compute_extra_samples(samples_remainder: i64, num_events: usize) -> Vec<i
 }
 
 fn insert_note(
-    events_map: &mut HashMap<usize, Vec<SimpleNoteEvent>>,
+    events_map: &mut HashMap<usize, Vec<PreciseEventType>>,
     event: &Event,
     note: &Note,
     channel: Option<u8>,
@@ -124,14 +145,14 @@ fn insert_note(
     };
     events_map.insert(
         sample_idx,
-        vec![SimpleNoteEvent {
+        vec![PreciseEventType::Note(SimpleNoteEvent {
             note_type: NoteType::On,
             timing: sample_idx as u32,
             voice_id: None,
             channel: note_channel,
             note: note.note_num,
             velocity: note.velocity,
-        }],
+        })],
     );
     let event_length_samples = event.dur.num * tick_length_samples;
     let note_length_samples = (note.dur.num * event_length_samples) / note.dur.den;
@@ -139,19 +160,40 @@ fn insert_note(
 
     events_map.insert(
         note_off_timing as usize,
-        vec![SimpleNoteEvent {
+        vec![PreciseEventType::Note(SimpleNoteEvent {
             note_type: NoteType::Off,
             timing: note_off_timing,
             voice_id: None,
             channel: note_channel,
             note: note.note_num,
             velocity: 0.0,
-        }],
+        })],
+    );
+}
+
+fn insert_ctrl(
+    events_map: &mut HashMap<usize, Vec<PreciseEventType>>,
+    ctrl: &CtrlEvent,
+    channel: Option<u8>,
+    sample_idx: usize,
+) {
+    let ctrl_channel: u8 = match channel {
+        None => 1,
+        Some(ch) => ch,
+    };
+    events_map.insert(
+        sample_idx,
+        vec![PreciseEventType::Ctrl(SimpleCtrlEvent {
+            timing: sample_idx as u32,
+            channel: ctrl_channel,
+            cc: ctrl.cc,
+            value: ctrl.value,
+        })],
     );
 }
 
 fn insert_event(
-    events_map: &mut HashMap<usize, Vec<SimpleNoteEvent>>,
+    events_map: &mut HashMap<usize, Vec<PreciseEventType>>,
     event: &Event,
     channel: Option<u8>,
     tick_length_samples: i64,
@@ -183,15 +225,18 @@ fn insert_event(
         EventType::Rest => {
             events_map.insert(
                 sample_idx,
-                vec![SimpleNoteEvent {
+                vec![PreciseEventType::Note(SimpleNoteEvent {
                     note_type: NoteType::Rest,
                     timing: sample_idx as u32,
                     voice_id: None,
                     channel: 1,
                     note: 0,
                     velocity: 0.0,
-                }],
+                })],
             );
+        }
+        EventType::Ctrl(ctrl) => {
+            insert_ctrl(events_map, &ctrl, channel, sample_idx);
         }
     }
 }
@@ -212,7 +257,7 @@ impl PrecisePattern {
         let extra_samples = compute_extra_samples(samples_remainder, pattern.events.len());
 
         let mut sample_idx: usize = 0;
-        let mut events_map: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::new();
+        let mut events_map: HashMap<usize, Vec<PreciseEventType>> = HashMap::new();
 
         for (idx, event) in pattern.events.clone().into_iter().enumerate() {
             insert_event(
@@ -232,7 +277,7 @@ impl PrecisePattern {
         };
     }
 
-    pub fn get_events(&mut self, start: usize, end: usize) -> Vec<SimpleNoteEvent> {
+    pub fn get_events(&mut self, start: usize, end: usize) -> Vec<PreciseEventType> {
         if self.length_samples == 0 || !self.playing {
             return vec![];
         }
@@ -253,40 +298,53 @@ impl PrecisePattern {
         adj_start: usize,
         adj_end: usize,
         timing_offset: usize,
-    ) -> Vec<SimpleNoteEvent> {
-        let mut note_events: Vec<SimpleNoteEvent> = Vec::new();
+    ) -> Vec<PreciseEventType> {
+        let mut selected_events: Vec<PreciseEventType> = Vec::new();
 
         for sample_index in (adj_start..adj_end).map(|x| x as usize) {
             match self.events.get(&sample_index) {
                 None => (),
                 // Need to adjust the timing so that it is relative to the current audio buffer.
                 Some(events) => {
-                    events.into_iter().for_each(|ev| match ev.note_type {
-                        NoteType::Rest => {}
-                        NoteType::Off => {
-                            self.notes_playing.remove(&(
-                                ev.channel,
-                                ev.note,
-                                ev.voice_id.unwrap_or(0) as u8,
-                            ));
-                        }
-                        NoteType::On => {
-                            self.notes_playing
-                                .insert((ev.channel, ev.note, ev.voice_id.unwrap_or(0) as u8), ());
-                        }
+                    events.into_iter().for_each(|ev| match ev {
+                        PreciseEventType::Note(nev) => match nev.note_type {
+                            NoteType::Rest => {}
+                            NoteType::Off => {
+                                self.notes_playing.remove(&(
+                                    nev.channel,
+                                    nev.note,
+                                    nev.voice_id.unwrap_or(0) as u8,
+                                ));
+                            }
+                            NoteType::On => {
+                                self.notes_playing.insert(
+                                    (nev.channel, nev.note, nev.voice_id.unwrap_or(0) as u8),
+                                    (),
+                                );
+                            }
+                        },
+                        _ => {}
                     });
-                    note_events.extend(events.into_iter().cloned().map(|ev| SimpleNoteEvent {
-                        note_type: ev.note_type,
-                        timing: ((ev.timing as usize) - adj_start + timing_offset) as u32,
-                        voice_id: ev.voice_id,
-                        channel: ev.channel,
-                        note: ev.note,
-                        velocity: ev.velocity,
+                    selected_events.extend(events.into_iter().cloned().map(|pevt| match pevt {
+                        PreciseEventType::Note(ev) => PreciseEventType::Note(SimpleNoteEvent {
+                            note_type: ev.note_type,
+                            timing: ((ev.timing as usize) - adj_start + timing_offset) as u32,
+                            voice_id: ev.voice_id,
+                            channel: ev.channel,
+                            note: ev.note,
+                            velocity: ev.velocity,
+                        }),
+                        PreciseEventType::Ctrl(ev) => PreciseEventType::Ctrl(SimpleCtrlEvent {
+                            timing: ((ev.timing as usize) - adj_start + timing_offset) as u32,
+                            channel: ev.channel,
+                            cc: ev.cc,
+                            value: ev.value,
+                        }),
                     }))
                 }
             };
         }
-        note_events
+        selected_events
     }
 
     pub fn get_notes_playing(&mut self) -> Vec<SimpleNoteEvent> {
@@ -311,7 +369,7 @@ impl PrecisePattern {
 mod tests {
     use crate::pattern::{
         compute_extra_samples, Event, EventType, FractionalDuration, Note, NoteType, Pattern,
-        PrecisePattern, SimpleNoteEvent,
+        PreciseEventType, PrecisePattern, SimpleNoteEvent,
     };
     use std::collections::HashMap;
 
@@ -383,62 +441,62 @@ mod tests {
         let mut precise_pattern =
             PrecisePattern::from(&mut pattern.clone(), sample_rate, tempo, true);
         let buffer_size_samples = 256 as usize;
-        let expectations: HashMap<usize, Vec<SimpleNoteEvent>> = HashMap::from([
+        let expectations: HashMap<usize, Vec<PreciseEventType>> = HashMap::from([
             (
                 0,
-                vec![SimpleNoteEvent {
+                vec![PreciseEventType::Note(SimpleNoteEvent {
                     note_type: NoteType::On,
                     timing: 0,
                     voice_id: None,
                     channel: 1,
                     note: 60,
                     velocity: 0.8,
-                }],
+                })],
             ),
             (
                 25,
-                vec![SimpleNoteEvent {
+                vec![PreciseEventType::Note(SimpleNoteEvent {
                     note_type: NoteType::Off,
                     timing: 145,
                     voice_id: None,
                     channel: 1,
                     note: 60,
                     velocity: 0.0,
-                }],
+                })],
             ),
             (
                 102,
-                vec![SimpleNoteEvent {
+                vec![PreciseEventType::Note(SimpleNoteEvent {
                     note_type: NoteType::On,
                     timing: 70,
                     voice_id: None,
                     channel: 1,
                     note: 96,
                     velocity: 0.8,
-                }],
+                })],
             ),
             (
                 127,
-                vec![SimpleNoteEvent {
+                vec![PreciseEventType::Note(SimpleNoteEvent {
                     note_type: NoteType::Off,
                     timing: 215,
                     voice_id: None,
                     channel: 1,
                     note: 96,
                     velocity: 0.0,
-                }],
+                })],
             ),
             // Add this last one to see how the code behaves when the pattern loops.
             (
                 204,
-                vec![SimpleNoteEvent {
+                vec![PreciseEventType::Note(SimpleNoteEvent {
                     note_type: NoteType::On,
                     timing: 139,
                     voice_id: None,
                     channel: 1,
                     note: 60,
                     velocity: 0.8,
-                }],
+                })],
             ),
         ]);
         let max_buf_num = *expectations.keys().max().unwrap();
