@@ -368,8 +368,8 @@ impl PrecisePattern {
 #[cfg(test)]
 mod tests {
     use crate::pattern::{
-        compute_extra_samples, Event, EventType, FractionalDuration, Note, NoteType, Pattern,
-        PreciseEventType, PrecisePattern, SimpleNoteEvent,
+        compute_extra_samples, CtrlEvent, Event, EventType, FractionalDuration, Note, NoteType,
+        Pattern, PreciseEventType, PrecisePattern, SimpleCtrlEvent, SimpleNoteEvent,
     };
     use std::collections::HashMap;
 
@@ -413,7 +413,7 @@ mod tests {
     }
 
     #[test]
-    fn test_precise_pattern() -> Result<(), String> {
+    fn test_precise_pattern_notes() -> Result<(), String> {
         let pattern = Pattern {
             channel: Some(1),
             length_bars: Some(FractionalDuration { num: 1, den: 2 }),
@@ -496,6 +496,72 @@ mod tests {
                     channel: 1,
                     note: 60,
                     velocity: 0.8,
+                })],
+            ),
+        ]);
+        let max_buf_num = *expectations.keys().max().unwrap();
+
+        for bufnum in 0..(max_buf_num + 1) {
+            let expected_events_opt = expectations.get(&bufnum);
+            let buffer_start_samples = bufnum * buffer_size_samples;
+            let buffer_end_samples = buffer_start_samples + buffer_size_samples;
+            let events = precise_pattern.get_events(buffer_start_samples, buffer_end_samples);
+            match expected_events_opt {
+                Some(expected_events) => {
+                    assert_eq!(*expected_events, events);
+                }
+                None => {
+                    assert_eq!(events.len(), 0);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_precise_pattern_ctrl() -> Result<(), String> {
+        let pattern = Pattern {
+            channel: Some(1),
+            length_bars: Some(FractionalDuration { num: 1, den: 2 }),
+            events: vec![
+                Event {
+                    action: EventType::Ctrl(CtrlEvent {
+                        cc: 102,
+                        value: 0.8,
+                    }),
+                    dur: FractionalDuration { num: 1, den: 2 },
+                },
+                Event {
+                    action: EventType::Ctrl(CtrlEvent {
+                        cc: 102,
+                        value: 0.4,
+                    }),
+                    dur: FractionalDuration { num: 1, den: 2 },
+                },
+            ],
+        };
+        let sample_rate = 48000 as f32;
+        let tempo = 110 as f64;
+        let mut precise_pattern =
+            PrecisePattern::from(&mut pattern.clone(), sample_rate, tempo, true);
+        let buffer_size_samples = 256 as usize;
+        let expectations: HashMap<usize, Vec<PreciseEventType>> = HashMap::from([
+            (
+                0,
+                vec![PreciseEventType::Ctrl(SimpleCtrlEvent {
+                    timing: 0,
+                    channel: 1,
+                    cc: 102,
+                    value: 0.8,
+                })],
+            ),
+            (
+                102,
+                vec![PreciseEventType::Ctrl(SimpleCtrlEvent {
+                    timing: 70,
+                    channel: 1,
+                    cc: 102,
+                    value: 0.4,
                 })],
             ),
         ]);
