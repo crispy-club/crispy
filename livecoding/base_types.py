@@ -121,6 +121,33 @@ Zero = Duration(0, 1)
 
 
 @define
+class Ctrl:
+    @define
+    class Params:
+        cc: int
+        value: float
+
+    CtrlEvent: Params
+
+    def __init__(self, ctrl_event: Params) -> None:
+        self.CtrlEvent = ctrl_event
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Ctrl):
+            return False
+        return all(
+            [
+                getattr(self.CtrlEvent, attr_name)
+                == getattr(other.CtrlEvent, attr_name)
+                for attr_name in {"cc", "value"}
+            ]
+        )
+
+    def json(self) -> str:
+        return json.dumps(asdict(self), separators=(",", ":"))
+
+
+@define
 class Note:
     @define
     class Params:
@@ -159,42 +186,45 @@ class Note:
 
 @define
 class Event:
-    action: Note | Rest
+    action: Ctrl | Note | Rest
     dur: Duration
 
     def json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))
 
 
-NotePatternFilter = Callable[["NotePattern"], "NotePattern"]
+PluginPatternFilter = Callable[["PluginPattern"], "PluginPattern"]
 
 
 @define
-class NotePattern:
+class PluginPattern:
     name: str
     events: list[Event]
     length_bars: Duration
 
-    def __add__(self, other: "NotePattern") -> "NotePattern":
-        return NotePattern(
+    def __add__(self, other: "PluginPattern") -> "PluginPattern":
+        return PluginPattern(
             name=self.name,
             events=self.events + other.events,
             length_bars=self.length_bars + other.length_bars,
         )
 
-    def __mul__(self, times: int) -> "NotePattern":
+    def __mul__(self, times: int) -> "PluginPattern":
         assert times > 0
-        return NotePattern(
+        return PluginPattern(
             events=self.events * times,
             length_bars=self.length_bars * times,
             name=self.name,
         )
 
-    def __or__(self, pattern_filter: NotePatternFilter) -> "NotePattern":
+    def __or__(self, pattern_filter: PluginPatternFilter) -> "PluginPattern":
         return pattern_filter(self)
 
     def json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))
+
+    def rhythm(self) -> list[Duration]:
+        return [ev.dur for ev in self.events]
 
     def stop(self) -> None:
         resp = requests.post(f"http://127.0.0.1:3000/stop/{self.name}")

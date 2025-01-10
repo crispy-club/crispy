@@ -1,6 +1,7 @@
 use crate::controller::{start_pattern, stop_pattern, Command, Controller};
 use crate::pattern::{
-    FractionalDuration, NamedPattern, NoteType, Pattern, PrecisePattern, SimpleNoteEvent,
+    FractionalDuration, NamedPattern, NoteType, Pattern, PreciseEventType, PrecisePattern,
+    SimpleNoteEvent,
 };
 use axum::{routing::post, Router};
 use nih_plug::prelude::*;
@@ -52,7 +53,7 @@ impl Live {
         ProcessStatus::Normal
     }
 
-    fn get_events(&mut self, pos_samples: usize, buf_size: usize) -> Vec<SimpleNoteEvent> {
+    fn get_events(&mut self, pos_samples: usize, buf_size: usize) -> Vec<PreciseEventType> {
         return self
             .precise_patterns
             .values_mut()
@@ -150,7 +151,7 @@ impl Live {
         if let Some(mut pattern) = prev_pattern {
             let notes_playing = pattern.get_notes_playing();
             notes_playing.into_iter().for_each(|nev| {
-                self.send(context, nev);
+                self.send(context, PreciseEventType::Note(nev));
             });
         }
         nih_log!(
@@ -177,26 +178,36 @@ impl Live {
         return ProcessStatus::Normal;
     }
 
-    fn send(&self, context: &mut impl ProcessContext<Self>, sev: SimpleNoteEvent) -> () {
-        match sev.note_type {
-            NoteType::On => {
-                nih_log!("note {} played on channel {}", sev.note, sev.channel - 1);
-                context.send_event(NoteEvent::NoteOn {
-                    timing: sev.timing,
-                    voice_id: sev.voice_id,
-                    channel: sev.channel - 1,
-                    note: sev.note,
-                    velocity: sev.velocity,
-                })
+    fn send(&self, context: &mut impl ProcessContext<Self>, pevt: PreciseEventType) -> () {
+        match pevt {
+            PreciseEventType::Note(nev) => match nev.note_type {
+                NoteType::On => {
+                    nih_log!("note {} played on channel {}", nev.note, nev.channel - 1);
+                    context.send_event(NoteEvent::NoteOn {
+                        timing: nev.timing,
+                        voice_id: nev.voice_id,
+                        channel: nev.channel - 1,
+                        note: nev.note,
+                        velocity: nev.velocity,
+                    })
+                }
+                NoteType::Off => context.send_event(NoteEvent::NoteOff {
+                    timing: nev.timing,
+                    voice_id: nev.voice_id,
+                    channel: nev.channel - 1,
+                    note: nev.note,
+                    velocity: 0.0,
+                }),
+                NoteType::Rest => {}
+            },
+            PreciseEventType::Ctrl(cev) => {
+                context.send_event(NoteEvent::MidiCC {
+                    timing: cev.timing,
+                    channel: cev.channel - 1,
+                    cc: cev.cc,
+                    value: cev.value,
+                });
             }
-            NoteType::Off => context.send_event(NoteEvent::NoteOff {
-                timing: sev.timing,
-                voice_id: sev.voice_id,
-                channel: sev.channel - 1,
-                note: sev.note,
-                velocity: 0.0,
-            }),
-            NoteType::Rest => {}
         }
     }
 
@@ -220,7 +231,7 @@ impl Live {
             .flatten()
             .collect::<Vec<SimpleNoteEvent>>()
         {
-            self.send(context, event);
+            self.send(context, PreciseEventType::Note(event));
         }
     }
 }

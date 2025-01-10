@@ -4,7 +4,7 @@ from attrs import define
 from lark import Lark, Token, Transformer, Tree
 from wonderwords import RandomWord, Defaults
 
-from livecoding.base_types import Duration, Event, Note, NotePattern, Rest
+from livecoding.base_types import Duration, Event, Note, PluginPattern, Rest
 from livecoding.notes import NoteNumbers
 
 
@@ -60,16 +60,16 @@ def get_pattern_parser() -> Lark:
 _LEAF_TYPE = int | tuple[int, int]
 
 
-def _random_name() -> str:
+def random_name() -> str:
     adj, noun = RandomWord(adj=Defaults.ADJECTIVES), RandomWord(adj=Defaults.NOUNS)
     return f"{adj.word()}-{noun.word()}"
 
 
 def get_note_pattern(
     length_bars: Duration, tree: Tree[_LEAF_TYPE], default_velocity: float
-) -> NotePattern:
-    return NotePattern(
-        name=_random_name(),
+) -> PluginPattern:
+    return PluginPattern(
+        name=random_name(),
         length_bars=length_bars,
         events=_get_events(tree, default_velocity, length_bars),
     )
@@ -183,7 +183,7 @@ def notes(
     definition: str,
     length_bars: Duration = Duration(1, 1),
     default_velocity: float = 0.8,
-) -> NotePattern:
+) -> PluginPattern:
     """
     note_pattern parses the melody DSL, which is very similar in spirit to the
     tidal cycles "mini notation"
