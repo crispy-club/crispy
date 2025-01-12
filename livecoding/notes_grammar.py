@@ -2,13 +2,13 @@ import itertools
 
 from attrs import define
 from lark import Lark, Token, Transformer, Tree
-from wonderwords import RandomWord, Defaults
 
 from livecoding.base_types import Duration, Event, Note, PluginPattern, Rest
 from livecoding.notes import NoteNumbers
+from livecoding.util import random_name
 
 
-def lark_ebnf() -> str:
+def notes_lark_ebnf() -> str:
     notes = """
           | """.join(
         " | ".join((f'"{n}"' for n in notes))
@@ -53,16 +53,11 @@ _PARSER: Lark | None = None
 def get_pattern_parser() -> Lark:
     global _PARSER
     if _PARSER is None:
-        _PARSER = Lark(lark_ebnf(), start="pattern")
+        _PARSER = Lark(notes_lark_ebnf(), start="pattern")
     return _PARSER
 
 
 _LEAF_TYPE = int | tuple[int, int]
-
-
-def random_name() -> str:
-    adj, noun = RandomWord(adj=Defaults.ADJECTIVES), RandomWord(adj=Defaults.NOUNS)
-    return f"{adj.word()}-{noun.word()}"
 
 
 def get_note_pattern(

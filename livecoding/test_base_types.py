@@ -1,5 +1,5 @@
 from livecoding.base_types import Bar, Duration, Event, Note
-from livecoding.grammar import notes
+from livecoding.notes_grammar import notes
 from livecoding.pattern import name, resize
 
 

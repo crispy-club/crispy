@@ -14,6 +14,7 @@ from livecoding.base_types import (
     Sixteenth,
     Zero,
 )
+from livecoding.notes_grammar import notes
 from livecoding.pattern import (
     Perc,
     rev,
@@ -28,7 +29,6 @@ from livecoding.pattern import (
     revery,
     levery,
 )
-from livecoding.grammar import notes
 
 
 def test_empty_pattern() -> None:

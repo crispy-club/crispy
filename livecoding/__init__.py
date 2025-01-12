@@ -7,9 +7,7 @@ from .base_types import (
     Rest as Rest,
     Zero as Zero,
 )
-from .grammar import (
-    get_pattern_parser as get_pattern_parser,
-    lark_ebnf as lark_ebnf,
+from .notes_grammar import (
     notes as notes,
 )
 from .notes import NoteNumbers as NoteNumbers

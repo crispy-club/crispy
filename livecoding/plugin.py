@@ -1,12 +1,10 @@
-import itertools
 import json
-from typing import Any, Iterable
+from typing import Any
 
 import requests
 from attrs import asdict, define
 
-from livecoding.base_types import Bar, Ctrl, Duration, Event, PluginPattern, Sixteenth
-from livecoding.grammar import random_name
+from livecoding.base_types import PluginPattern
 from livecoding.pattern import name
 
 
@@ -41,44 +39,6 @@ ch13 = Channel(13)
 ch14 = Channel(14)
 ch15 = Channel(15)
 ch16 = Channel(16)
-
-
-@define
-class CC:
-    channel: int
-    number: int
-
-    def __lshift__(self, pattern: PluginPattern) -> None:
-        play(pattern | name(f"cc{self.number}"), channel=self.channel)
-
-
-@define
-class CtrlEvent:
-    cc: int
-    value: float
-
-
-def _ctrl_events(
-    values: Iterable[CtrlEvent], rhythm: Iterable[Duration]
-) -> list[Event]:
-    durations = itertools.cycle(rhythm)
-    return [
-        Event(action=Ctrl(Ctrl.Params(cc=cev.cc, value=cev.value)), dur=next(durations))
-        for cev in values
-    ]
-
-
-def ctrl(
-    values: Iterable[CtrlEvent],
-    channel: int = 1,
-    rhythm: Iterable[Duration] | None = None,
-    length_bars: Duration = Bar,
-) -> PluginPattern:
-    if rhythm is None:
-        rhythm = [Sixteenth]
-    return PluginPattern(
-        name=random_name(), length_bars=length_bars, events=_ctrl_events(values, rhythm)
-    )
 
 
 def stop(pattern_name: str) -> None:
