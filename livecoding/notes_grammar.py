@@ -28,7 +28,7 @@ def notes_lark_ebnf() -> str:
 
     rest: "~"
 
-    rest_repeated: rest INT
+    rest_repeated: rest "*" INT
 
     !note: {notes}
 
