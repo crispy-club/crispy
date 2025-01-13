@@ -1,6 +1,6 @@
 import itertools
 from collections.abc import Iterator
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from attrs import define
 from lark import Lark, Token, Transformer, Tree
@@ -21,7 +21,7 @@ def rhythm_lark_ebnf() -> str:
 
     rest: "~"
 
-    rest_repeated: rest INT
+    rest_repeated: rest "*" INT
 
     velocity: NUMBER
 
@@ -94,16 +94,34 @@ def get_rhythm(length_bars: Duration, tree: Tree[_LEAF_TYPE]) -> Rhythm:
     )
 
 
+def flatten_repeated(children: list[Any]) -> list[Any]:
+    res = []
+    for child in children:
+        if not isinstance(child, Tree):
+            continue
+        if len(child.children) != 1:
+            continue
+        if isinstance(child.children[0], RestRepeated):
+            res += ["Rest"] * child.children[0].repeats
+        elif isinstance(child.children[0], VelocityRepeated):
+            res += child.children[0].value  # type: ignore
+        else:
+            res.append(child)  # type: ignore
+    # If nothing in the list was a Tree, we should just return the original list.
+    return res if len(res) > 0 else children
+
+
 def _get_hits(tree: Tree[_LEAF_TYPE], total_length: Duration) -> list[Hit | RestFor]:
     if len(tree.children) == 0:
         return []
     hits: list[Hit | RestFor] = []
-    each_dur = total_length / len(tree.children)
-    for child in tree.children:
+    children = flatten_repeated(tree.children)
+    each_dur = total_length / len(children)
+    for child in children:
         if isinstance(child, Tree):
             hits += _get_hits(child, each_dur)
             continue
-        if isinstance(child, float):
+        elif isinstance(child, float):
             assert 0.0 <= child and child <= 1.0
             hits.append(Hit(velocity=child, dur=each_dur))
         elif isinstance(child, VelocityRepeated):
@@ -141,7 +159,7 @@ class PatternTransformer(Transformer[Token, _LEAF_TYPE]):
     def velocity(self, value: list[str]) -> float:
         assert len(value) == 1
         fv = float(value[0])
-        assert fv >= 0 and fv <= 1
+        assert fv >= 0.0 and fv <= 1.0
         return fv
 
     def velocity_repeated(self, value: tuple[int, Token]) -> VelocityRepeated:
@@ -169,8 +187,11 @@ def rhythm(
     tidal cycles "mini notation"
     """
     ast = get_rhythm_parser().parse(definition)
+    print(f"ast -> {ast}")
     transformer = get_transformer()
+    transformed = transformer.transform(ast)
+    print(f"transformed -> {transformed}")
     return get_rhythm(
         length_bars=length_bars,
-        tree=transformer.transform(ast),  # type: ignore
+        tree=transformed,  # type: ignore
     )

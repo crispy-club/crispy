@@ -6,7 +6,7 @@ from .scales import (
     MajLocrian,
     MajNeapolitan,
     MajPent,
-    MinHarmonic,
+    MinHarm,
     MinHungarian,
     MinMelodic,
     MinNat,
@@ -114,7 +114,7 @@ def test_scales_cmaj_pent() -> None:
 
 
 def test_scales_cmin_harmonic() -> None:
-    scale = MinHarmonic(C | Octave(2))
+    scale = MinHarm(C | Octave(2))
     scale_len = len(scale.pitch_classes())
     assert list(scale | cycle([i for i in range(scale_len)])) == [
         48,
