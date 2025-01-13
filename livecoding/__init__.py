@@ -23,6 +23,16 @@ from .pattern import (
     name as name,
     perc as perc,
 )
+from .pitches import (
+    C as C,
+    D as D,
+    E as E,
+    F as F,
+    G as G,
+    A as A,
+    B as B,
+    Octave as Octave,
+)
 from .plugin import (
     ch1 as ch1,
     ch2 as ch2,
@@ -42,4 +52,21 @@ from .plugin import (
     ch16 as ch16,
     play as play,
     stop as stop,
+)
+from .rhythm_grammar import rhythm as rhythm
+from .scales import (
+    Acoustic as Acoustic,
+    Maj as Maj,
+    MajHarm as MajHarm,
+    MajHungarian as MajHungarian,
+    MajLocrian as MajLocrian,
+    MajNeapolitan as MajNeapolitan,
+    MajPent as MajPent,
+    MinHarm as MinHarm,
+    MinHungarian as MinHungarian,
+    MinMelodic as MinMelodic,
+    MinNat as MinNat,
+    MinNeapolitan as MinNeapolitan,
+    MinPent as MinPent,
+    cycle as cycle,
 )
