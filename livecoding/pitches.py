@@ -29,3 +29,11 @@ class Octave:
 
     def __ror__(self, pitch_class: PitchClass) -> int:
         return (self.num * 12) + int(pitch_class)
+
+
+@define
+class Oct:
+    num: int
+
+    def __ror__(self, pitch_class: PitchClass) -> int:
+        return (self.num * 12) + int(pitch_class)

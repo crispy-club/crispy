@@ -46,6 +46,86 @@ class Acoustic(Scale):
     _pitchclasses = (0, 2, 4, 6, 7, 9, 10)
 
 
+class Altered(Scale):
+    _pitchclasses = (0, 1, 3, 4, 6, 8, 10)
+
+
+class Augmented(Scale):
+    _pitchclasses = (0, 3, 4, 7, 8, 11)
+
+
+class Bebop(Scale):
+    _pitchclasses = (0, 2, 4, 5, 7, 9, 10, 11)
+
+
+class Blues(Scale):
+    _pitchclasses = (0, 3, 5, 6, 7, 10)
+
+
+class Chromatic(Scale):
+    _pitchclasses = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+
+
+class Dorian(Scale):
+    _pitchclasses = (0, 2, 3, 5, 7, 9, 10)
+
+
+class DoubleHarm(Scale):
+    _pitchclasses = (0, 1, 4, 5, 7, 8, 11)
+
+
+class Enigmatic(Scale):
+    _pitchclasses = (0, 1, 4, 6, 8, 10, 11)
+
+
+class Flamenco(Scale):
+    _pitchclasses = (0, 1, 4, 5, 7, 8, 11)
+
+
+class Gypsy(Scale):
+    _pitchclasses = (0, 2, 3, 6, 7, 8, 10)
+
+
+class HalfDiminished(Scale):
+    _pitchclasses = (0, 2, 3, 5, 6, 8, 10)
+
+
+class Hirajoshi(Scale):
+    _pitchclasses = (0, 4, 6, 7, 11)
+
+
+class In(Scale):
+    _pitchclasses = (0, 1, 5, 7, 8)
+
+
+class Insen(Scale):
+    _pitchclasses = (0, 1, 5, 7, 10)
+
+
+class Iwato(Scale):
+    _pitchclasses = (0, 1, 5, 6, 10)
+
+
+class Locrian(Scale):
+    _pitchclasses = (0, 1, 3, 5, 6, 8, 10)
+
+
+class LocrianSharp6(Scale):
+    _pitchclasses = (0, 1, 3, 5, 6, 9, 10)
+
+
+class Lydian(Scale):
+    _pitchclasses = (0, 2, 4, 6, 7, 9, 11)
+
+
+class LydianAugmented(Scale):
+    _pitchclasses = (0, 2, 4, 6, 8, 9, 11)
+
+
+class LydianDiminished(Scale):
+    _pitchclasses = (0, 2, 3, 6, 7, 9, 11)
+
+
 class Maj(Scale):
     _pitchclasses = (0, 2, 4, 5, 7, 9, 11)
 
@@ -92,6 +172,50 @@ class MinNeapolitan(Scale):
 
 class MinPent(Scale):
     _pitchclasses = (0, 3, 5, 7, 10)
+
+
+class Mixolydian(Scale):
+    _pitchclasses = (0, 2, 4, 5, 7, 9, 10)
+
+
+class Octatonic(Scale):
+    _pitchclasses = (0, 2, 3, 5, 6, 8, 9, 11)
+
+
+class Persian(Scale):
+    _pitchclasses = (0, 1, 4, 5, 6, 8, 11)
+
+
+class Phrygian(Scale):
+    _pitchclasses = (0, 1, 3, 5, 7, 8, 10)
+
+
+class PhrygianDominant(Scale):
+    _pitchclasses = (0, 1, 4, 5, 7, 8, 10)
+
+
+class Prometheus(Scale):
+    _pitchclasses = (0, 2, 4, 6, 9, 10)
+
+
+class Tritone(Scale):
+    _pitchclasses = (0, 1, 4, 6, 7, 10)
+
+
+class TritoneSemi2(Scale):
+    _pitchclasses = (0, 1, 2, 6, 7, 8)
+
+
+class UkrainianDorian(Scale):
+    _pitchclasses = (0, 2, 3, 6, 7, 9, 10)
+
+
+class WholeTone(Scale):
+    _pitchclasses = (0, 2, 4, 6, 8, 10)
+
+
+class Yo(Scale):
+    _pitchclasses = (0, 2, 5, 7, 9)
 
 
 Ionian = Maj
