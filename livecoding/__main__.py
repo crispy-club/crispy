@@ -4,7 +4,7 @@ import click
 from attrs import define
 
 from livecoding.base_types import PluginPattern
-from livecoding.grammar import lark_ebnf, notes
+from livecoding.notes_grammar import notes
 from livecoding.notes import NoteNumbers
 from livecoding.pattern import name, perc
 from livecoding.plugin import play, stop
@@ -20,11 +20,6 @@ class Melody:
 @click.group
 def cli() -> None:
     pass
-
-
-@cli.command()
-def ebnf() -> None:
-    print(lark_ebnf())
 
 
 @cli.command()

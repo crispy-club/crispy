@@ -14,6 +14,7 @@ from livecoding.base_types import (
     Sixteenth,
     Zero,
 )
+from livecoding.notes_grammar import notes
 from livecoding.pattern import (
     Perc,
     rev,
@@ -28,7 +29,6 @@ from livecoding.pattern import (
     revery,
     levery,
 )
-from livecoding.grammar import notes
 
 
 def test_empty_pattern() -> None:
@@ -75,22 +75,22 @@ def test_pattern_with_rest() -> None:
 
 
 def test_pattern_with_rest_repeated() -> None:
-    res = notes("[c2,0.8 ~2]") | name("foo")
+    res = notes("[c2,0.8 ~*2]") | name("foo")
     assert res == PluginPattern(
         name="foo",
         length_bars=Bar,
         events=[
             Event(
                 action=Note(Note.Params(note_num=48, velocity=0.8, dur=Duration(1, 2))),
-                dur=Bar / 2,
+                dur=Bar / 3,
             ),
             Event(
                 action="Rest",
-                dur=Bar / 4,
+                dur=Bar / 3,
             ),
             Event(
                 action="Rest",
-                dur=Bar / 4,
+                dur=Bar / 3,
             ),
         ],
     )

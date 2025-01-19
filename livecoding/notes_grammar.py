@@ -1,14 +1,15 @@
 import itertools
+from typing import Any
 
 from attrs import define
 from lark import Lark, Token, Transformer, Tree
-from wonderwords import RandomWord, Defaults
 
 from livecoding.base_types import Duration, Event, Note, PluginPattern, Rest
 from livecoding.notes import NoteNumbers
+from livecoding.util import random_name
 
 
-def lark_ebnf() -> str:
+def notes_lark_ebnf() -> str:
     notes = """
           | """.join(
         " | ".join((f'"{n}"' for n in notes))
@@ -28,7 +29,7 @@ def lark_ebnf() -> str:
 
     rest: "~"
 
-    rest_repeated: rest INT
+    rest_repeated: rest "*" INT
 
     !note: {notes}
 
@@ -53,16 +54,11 @@ _PARSER: Lark | None = None
 def get_pattern_parser() -> Lark:
     global _PARSER
     if _PARSER is None:
-        _PARSER = Lark(lark_ebnf(), start="pattern")
+        _PARSER = Lark(notes_lark_ebnf(), start="pattern")
     return _PARSER
 
 
 _LEAF_TYPE = int | tuple[int, int]
-
-
-def random_name() -> str:
-    adj, noun = RandomWord(adj=Defaults.ADJECTIVES), RandomWord(adj=Defaults.NOUNS)
-    return f"{adj.word()}-{noun.word()}"
 
 
 def get_note_pattern(
@@ -75,14 +71,32 @@ def get_note_pattern(
     )
 
 
+def flatten_repeated(children: list[Any]) -> list[Any]:
+    res = []
+    for child in children:
+        if not isinstance(child, Tree):
+            continue
+        if len(child.children) != 1:
+            continue
+        if isinstance(child.children[0], RestRepeated):
+            res += ["Rest"] * child.children[0].repeats
+        elif isinstance(child.children[0], NoteRepeated):
+            res += child.children[0].value  # type: ignore
+        else:
+            res.append(child)  # type: ignore
+    # If nothing in the list was a Tree, we should just return the original list.
+    return res if len(res) > 0 else children
+
+
 def _get_events(
     tree: Tree[_LEAF_TYPE], default_velocity: float, total_length: Duration
 ) -> list[Event]:
     if len(tree.children) == 0:
         return []
     events: list[Event] = []
-    each_dur = total_length / len(tree.children)
-    for child in tree.children:
+    children = flatten_repeated(tree.children)
+    each_dur = total_length / len(children)
+    for child in children:
         if isinstance(child, Tree):
             events += _get_events(child, default_velocity, each_dur)
             continue

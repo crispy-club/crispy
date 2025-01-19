@@ -1,6 +1,6 @@
 from lark import Token, Tree
 
-from livecoding.grammar import get_pattern_parser, get_transformer
+from livecoding.notes_grammar import get_pattern_parser, get_transformer
 
 
 def test_pattern_with_just_notes() -> None:
