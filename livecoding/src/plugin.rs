@@ -208,6 +208,14 @@ impl Live {
                     value: cev.value,
                 });
             }
+            PreciseEventType::VoiceTerminated(vt) => {
+                context.send_event(NoteEvent::VoiceTerminated {
+                    timing: vt.timing,
+                    channel: vt.channel - 1,
+                    voice_id: vt.voice_id,
+                    note: vt.note,
+                });
+            }
         }
     }
 
