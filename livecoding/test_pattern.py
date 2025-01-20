@@ -28,6 +28,8 @@ from livecoding.pattern import (
     name,
     revery,
     levery,
+    each,
+    each_note,
 )
 
 
@@ -295,3 +297,98 @@ def test_perc_broken_notation() -> None:
         perc.parse("c1 = foo")
 
     assert str(ex.value) == "unsupported notation: f (line format is NOTE = [Xx_.])"
+
+
+def test_each_identity() -> None:
+    assert notes("[c3 d3 e3 g3]") | each(lambda e: e) | name("foo") == notes(
+        "[c3 d3 e3 g3]"
+    ) | name("foo")
+
+
+def test_each_multiply_duration() -> None:
+    assert notes("[c3 g3]") | each(lambda e: e * Duration(2, 1)) | name(
+        "foo"
+    ) == PluginPattern(
+        name="foo",
+        length_bars=Bar * 2,
+        events=[
+            Event(
+                dur=Bar,
+                action=Note(
+                    Note.Params(
+                        note_num=60,
+                        velocity=0.8,
+                        dur=Bar,
+                    ),
+                ),
+            ),
+            Event(
+                dur=Bar,
+                action=Note(
+                    Note.Params(
+                        note_num=67,
+                        velocity=0.8,
+                        dur=Bar,
+                    ),
+                ),
+            ),
+        ],
+    )
+
+
+def test_each_note_multiply_duration() -> None:
+    # This example pattern is pretty weird.
+    # ```
+    # notes("[c3 g3]") | each_note(lambda n: n * Duration(2, 1))
+    # ```
+    #
+    # I'm not sure what exactly is going on with the plugin when it
+    # plays this back!
+    # We start with the pattern looking something like this
+    #
+    # | event(1/2) | event(1/2) |
+    # | note(1/2)  | note(1/2)  |
+    #
+    # and then we transform it to this
+    #
+    # | event(1/2) | event(1/2) |
+    # | note(1/1)  | note(1/1)  |
+    #
+    # But the pattern length is still just 1 bar.
+    # I think the first note event is straightforward to understand.
+    # It should trigger a NoteOn at the very beginning of the pattern,
+    # and then a NoteOff at the very end of the pattern.
+    # The second event is a bit weird.
+    # It should trigger a NoteOn halfway through the pattern, but then
+    # the question is when will the NoteOff get triggered?
+    # I think ultimately the best way to figure out what the plugin is doing
+    # is with a unit test.
+    #
+    assert notes("[c3 g3]") | each_note(lambda n: n * Duration(2, 1)) | name(
+        "foo"
+    ) == PluginPattern(
+        name="foo",
+        length_bars=Bar,
+        events=[
+            Event(
+                dur=Bar / 2,
+                action=Note(
+                    Note.Params(
+                        note_num=60,
+                        velocity=0.8,
+                        dur=Bar,
+                    ),
+                ),
+            ),
+            Event(
+                dur=Bar / 2,
+                action=Note(
+                    Note.Params(
+                        note_num=67,
+                        velocity=0.8,
+                        dur=Bar,
+                    ),
+                ),
+            ),
+        ],
+    )

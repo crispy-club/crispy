@@ -1,7 +1,6 @@
 import itertools
+from dataclasses import dataclass
 from typing import Iterable
-
-from attrs import define
 
 from livecoding.base_types import Bar, Ctrl, Duration, Event, PluginPattern, Sixteenth
 from livecoding.pattern import name
@@ -9,7 +8,7 @@ from livecoding.plugin import play
 from livecoding.util import random_name
 
 
-@define
+@dataclass(slots=True)
 class CC:
     channel: int
     number: int
@@ -18,7 +17,7 @@ class CC:
         play(pattern | name(f"cc{self.number}"), channel=self.channel)
 
 
-@define
+@dataclass(slots=True)
 class CCEvent:
     cc: int
     value: float

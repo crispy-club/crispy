@@ -1,14 +1,14 @@
 import json
+from dataclasses import asdict, dataclass
 from typing import Any
 
 import requests
-from attrs import asdict, define
 
-from livecoding.base_types import PluginPattern
+from livecoding.base_types import PluginPattern, Zero
 from livecoding.pattern import name
 
 
-@define
+@dataclass(slots=True)
 class Channel:
     """
     ch1 << notes("[c0 d0 e0 f0]") | rev | resize(Bar * 4))
@@ -52,6 +52,9 @@ def play(*patterns: PluginPattern, channel: int | None = None) -> None:
 
 
 def _play(pattern: PluginPattern, channel: int | None = None) -> None:
+    assert (
+        sum(map(lambda ev: ev.dur, pattern.events), start=Zero) == pattern.length_bars
+    )
     body: dict[str, Any] = {"events": [asdict(ev) for ev in pattern.events]}
     if channel is not None:
         assert channel > 0 and channel <= 16

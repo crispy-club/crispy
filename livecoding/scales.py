@@ -1,7 +1,6 @@
-from attrs import define
-
 from abc import ABC
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Protocol
 
 
@@ -32,7 +31,7 @@ class Scale(ABC):
         return self._pitchclasses
 
 
-@define
+@dataclass(slots=True)
 class cycle:
     index: list[int]
 

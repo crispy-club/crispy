@@ -1,9 +1,10 @@
+import copy
 import functools
 import itertools
 import operator
 from collections import deque
-
-from attrs import define
+from dataclasses import dataclass
+from typing import Callable
 
 from livecoding.base_types import (
     Duration,
@@ -18,7 +19,7 @@ from livecoding.base_types import (
 from livecoding.notes import NoteNumbers
 
 
-@define
+@dataclass(slots=True)
 class Perc:
     previous_event: Event | None = None
 
@@ -108,7 +109,7 @@ def perc(
         raise ex
 
 
-@define
+@dataclass(slots=True)
 class _rev:
     def __call__(self, pattern: PluginPattern) -> PluginPattern:
         return PluginPattern(
@@ -121,7 +122,7 @@ class _rev:
 rev = _rev()
 
 
-@define
+@dataclass(slots=True)
 class tran:
     amount: int
 
@@ -140,7 +141,7 @@ class tran:
         return Event(dur=event.dur, action=event.action.transpose(self.amount))
 
 
-@define
+@dataclass(slots=True)
 class rot:
     n: int
 
@@ -166,7 +167,7 @@ def _right_clip(length_bars: Duration, events: list[Event]) -> list[Event]:
     return events
 
 
-@define
+@dataclass(slots=True)
 class lclip:
     length_bars: Duration
 
@@ -182,7 +183,7 @@ class lclip:
         )
 
 
-@define
+@dataclass(slots=True)
 class rclip:
     length_bars: Duration
 
@@ -196,7 +197,7 @@ class rclip:
         )
 
 
-@define
+@dataclass(slots=True)
 class ladd:
     pattern: PluginPattern
 
@@ -208,7 +209,7 @@ class ladd:
         )
 
 
-@define
+@dataclass(slots=True)
 class radd:
     pattern: PluginPattern
 
@@ -220,7 +221,7 @@ class radd:
         )
 
 
-@define
+@dataclass(slots=True)
 class resize:
     scalar: Duration
 
@@ -238,7 +239,7 @@ class resize:
         )
 
 
-@define
+@dataclass(slots=True)
 class name:
     new_name: str
 
@@ -250,7 +251,7 @@ class name:
         )
 
 
-@define
+@dataclass(slots=True)
 class revery:
     n: int
     filt: PluginPatternFilter
@@ -262,7 +263,7 @@ class revery:
         ) + self.filt(pattern)
 
 
-@define
+@dataclass(slots=True)
 class levery:
     n: int
     filt: PluginPatternFilter
@@ -271,4 +272,40 @@ class levery:
         assert self.n > 1
         return self.filt(pattern) + functools.reduce(
             operator.add, itertools.repeat(pattern, self.n - 1)
+        )
+
+
+EventFilter = Callable[[Event], Event]
+NoteFilter = Callable[[Note], Note]
+
+
+@dataclass(slots=True)
+class each:
+    f: EventFilter
+
+    def __call__(self, pattern: PluginPattern) -> PluginPattern:
+        new_events = list(map(self.f, pattern.events))
+        new_length = sum(map(lambda ev: ev.dur, new_events), start=Zero)
+        return copy.replace(
+            copy.replace(pattern, events=list(map(self.f, pattern.events))),
+            length_bars=new_length,
+        )
+
+
+@dataclass(slots=True)
+class each_note:
+    f: NoteFilter
+
+    def _eventfilter(self) -> EventFilter:
+        def filt(event: Event) -> Event:
+            if event.is_ctrl() or event.is_rest():
+                return event
+            assert isinstance(event.action, Note)
+            return copy.replace(event, action=self.f(event.action))
+
+        return filt
+
+    def __call__(self, pattern: PluginPattern) -> PluginPattern:
+        return copy.replace(
+            pattern, events=list(map(self._eventfilter(), pattern.events))
         )

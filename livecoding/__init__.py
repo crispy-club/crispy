@@ -22,6 +22,8 @@ from .pattern import (
     resize as resize,
     name as name,
     perc as perc,
+    each as each,
+    each_note as each_note,
 )
 from .pitches import (
     C as C,

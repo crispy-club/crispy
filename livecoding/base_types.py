@@ -1,15 +1,16 @@
+import copy
 import json
+from dataclasses import asdict, dataclass
 from math import gcd, lcm
 from typing import Callable, Literal, Union, overload
 
 import requests
-from attrs import asdict, define
 
 
 Rest = Literal["Rest"]
 
 
-@define
+@dataclass(slots=True)
 class Duration:
     num: int
     den: int
@@ -120,9 +121,9 @@ Sixteenth = Duration(1, 16)
 Zero = Duration(0, 1)
 
 
-@define
+@dataclass(slots=True)
 class Ctrl:
-    @define
+    @dataclass(slots=True)
     class Params:
         cc: int
         value: float
@@ -147,9 +148,9 @@ class Ctrl:
         return json.dumps(asdict(self), separators=(",", ":"))
 
 
-@define
+@dataclass(slots=True)
 class Note:
-    @define
+    @dataclass(slots=True)
     class Params:
         note_num: int
         velocity: float
@@ -174,6 +175,9 @@ class Note:
     def json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))
 
+    def __mul__(self, mul: Duration) -> "Note":
+        return Note(copy.replace(self.NoteEvent, dur=self.NoteEvent.dur * mul))
+
     def transpose(self, amount: int) -> "Note":
         return Note(
             self.Params(
@@ -184,10 +188,27 @@ class Note:
         )
 
 
-@define
+@dataclass(slots=True)
 class Event:
     action: Ctrl | Note | Rest
     dur: Duration
+
+    def is_ctrl(self) -> bool:
+        return isinstance(self.action, Ctrl)
+
+    def is_note(self) -> bool:
+        return isinstance(self.action, Note)
+
+    def is_rest(self) -> bool:
+        return isinstance(self.action, str) and self.action == "Rest"
+
+    def __mul__(self, mul: Duration) -> "Event":
+        if self.is_ctrl() or self.is_rest():
+            return copy.replace(self, dur=self.dur * mul)
+        # scale the duration of both the note and the containing event
+        assert isinstance(self.action, Note)
+        self.action.NoteEvent = copy.replace(self.action.NoteEvent, dur=self.dur * mul)
+        return copy.replace(self, dur=self.dur * mul)
 
     def json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))
@@ -196,7 +217,7 @@ class Event:
 PluginPatternFilter = Callable[["PluginPattern"], "PluginPattern"]
 
 
-@define
+@dataclass(slots=True)
 class PluginPattern:
     name: str
     events: list[Event]

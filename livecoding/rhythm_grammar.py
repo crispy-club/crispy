@@ -1,8 +1,8 @@
 import itertools
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Any, NamedTuple
 
-from attrs import define
 from lark import Lark, Token, Transformer, Tree
 
 from livecoding.base_types import Duration, Event, Note, PluginPattern, Rest
@@ -39,7 +39,7 @@ class Hit(NamedTuple):
     dur: Duration
 
 
-@define
+@dataclass(slots=True)
 class RestFor:
     dur: Duration
 
@@ -57,7 +57,7 @@ def _to_event(hitr: Hit | RestFor, note_numbers: Iterator[int]) -> Event:
     )
 
 
-@define
+@dataclass(slots=True)
 class Rhythm:
     hits: list[Hit | RestFor]
     length_bars: Duration
@@ -136,12 +136,12 @@ def _get_hits(tree: Tree[_LEAF_TYPE], total_length: Duration) -> list[Hit | Rest
     return hits
 
 
-@define
+@dataclass(slots=True)
 class VelocityRepeated:
     value: list[float]
 
 
-@define
+@dataclass(slots=True)
 class RestRepeated:
     repeats: int
 
