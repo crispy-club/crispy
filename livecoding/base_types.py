@@ -172,11 +172,14 @@ class Note:
             ]
         )
 
+    def __mul__(self, mul: Duration) -> "Note":
+        return Note(copy.replace(self.NoteEvent, dur=self.NoteEvent.dur * mul))
+
     def json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))
 
-    def __mul__(self, mul: Duration) -> "Note":
-        return Note(copy.replace(self.NoteEvent, dur=self.NoteEvent.dur * mul))
+    def set_dur(self, new_dur: Duration) -> "Note":
+        return Note(copy.replace(self.NoteEvent, dur=new_dur))
 
     def transpose(self, amount: int) -> "Note":
         return Note(
