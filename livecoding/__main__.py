@@ -1,7 +1,7 @@
 import sys
+from dataclasses import dataclass
 
 import click
-from attrs import define
 
 from livecoding.base_types import PluginPattern
 from livecoding.notes_grammar import notes
@@ -10,7 +10,7 @@ from livecoding.pattern import name, perc
 from livecoding.plugin import play, stop
 
 
-@define
+@dataclass(slots=True)
 class Melody:
     def parse(self, line: str) -> PluginPattern:
         _name, definition = line.strip().split("=")

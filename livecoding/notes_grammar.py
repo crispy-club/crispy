@@ -1,7 +1,7 @@
 import itertools
+from dataclasses import dataclass
 from typing import Any
 
-from attrs import define
 from lark import Lark, Token, Transformer, Tree
 
 from livecoding.base_types import Duration, Event, Note, PluginPattern, Rest
@@ -144,12 +144,12 @@ def _get_events(
     return events
 
 
-@define
+@dataclass(slots=True)
 class NoteRepeated:
     value: list[int]
 
 
-@define
+@dataclass(slots=True)
 class RestRepeated:
     repeats: int
 

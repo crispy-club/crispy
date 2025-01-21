@@ -1,9 +1,8 @@
 from abc import ABC
+from dataclasses import dataclass
 
-from attrs import define
 
-
-@define
+@dataclass(slots=True)
 class PitchClass(ABC):
     _offset: int
 
@@ -23,7 +22,7 @@ A = PitchClass(33)
 B = PitchClass(35)
 
 
-@define
+@dataclass(slots=True)
 class Octave:
     num: int
 
@@ -31,7 +30,7 @@ class Octave:
         return (self.num * 12) + int(pitch_class)
 
 
-@define
+@dataclass(slots=True)
 class Oct:
     num: int
 
