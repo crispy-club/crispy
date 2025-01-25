@@ -8,6 +8,7 @@ import requests
 
 
 Rest = Literal["Rest"]
+Sharp = Literal["#"]
 
 
 @dataclass(slots=True)
