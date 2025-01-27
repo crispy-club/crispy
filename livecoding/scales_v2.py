@@ -67,8 +67,16 @@ def _get_note_num(pitch_class: PitchClass, octave: Octave) -> int:
     return pitch_class + ((octave + 2) * 12)
 
 
-def _get_velocity(token: str) -> float:
+def get_velocity(token: str) -> float:
     return _VELOCITY_VALUES[ord(token[0]) - 97]
+
+
+@dataclass(slots=True)
+class _Alternation:
+    children: list[Union[str, "_Alternation", "_Group"]]
+
+    def __repr__(self) -> str:
+        return f"<{' '.join([repr(child) for child in self.children])}>"
 
 
 @dataclass(slots=True)
@@ -79,13 +87,45 @@ class _Group:
         return f"[{' '.join([repr(child) for child in self.children])}]"
 
 
-@dataclass(slots=True)
-class _Alternation:
-    anchor: Union[str, "_Alternation", "_Group"]
-    children: list[Union[str, "_Alternation", "_Group"]]
+def _expand_sub_alternations(alt: _Alternation) -> None:
+    idx = 0
+    new_children: list[str | _Alternation | _Group] = []
+    while idx < len(alt.children):
+        child = alt.children[idx]
+        if not isinstance(child, _Alternation):
+            new_children.append(child)
+            idx += 1
+            continue
+        if idx == 0:
+            raise InvalidSyntaxError("alternation must have an anchor")
+        _expand_sub_alternations(child)
+        new_children = new_children[:-1]
+        anchor = alt.children[idx - 1]
+        for child_a in child.children:
+            new_children += [anchor, child_a]
+        idx += 1
+    alt.children = new_children
 
-    def __repr__(self) -> str:
-        return f"[{' '.join([repr(child) for child in self.children])}]"
+
+def _expand_group_alternations(group: _Group) -> None:
+    # Result will be a group with no alternations
+    idx = 0
+    new_children: list[str | _Alternation | _Group] = []
+    while idx < len(group.children):
+        child = group.children[idx]
+        if not isinstance(child, _Alternation):
+            new_children.append(child)
+            idx += 1
+            continue
+        if idx == 0:
+            raise InvalidSyntaxError("alternation must have an anchor")
+        _expand_sub_alternations(child)
+        new_children = new_children[:-1]
+        anchor = group.children[idx - 1]
+        for child_a in child.children:
+            new_children += [anchor, child_a]
+        idx += 1
+    group.children = new_children
 
 
 def _parse_note(event_str: str, dur: Duration) -> list[Event]:
@@ -128,7 +168,7 @@ def _parse_note(event_str: str, dur: Duration) -> list[Event]:
                         note_num=_get_note_num(
                             _PITCH_CLASSES[event_str[0]], _DEFAULT_OCTAVE
                         ),
-                        velocity=_get_velocity(event_str[1]),
+                        velocity=get_velocity(event_str[1]),
                         dur=Half,
                     )
                 ),
@@ -161,7 +201,7 @@ def _parse_note(event_str: str, dur: Duration) -> list[Event]:
                             note_num=_get_note_num(
                                 _PITCH_CLASSES[event_str[0]] + 1, _DEFAULT_OCTAVE
                             ),
-                            velocity=_get_velocity(event_str[2]),
+                            velocity=get_velocity(event_str[2]),
                             dur=Half,
                         )
                     ),
@@ -192,7 +232,7 @@ def _parse_note(event_str: str, dur: Duration) -> list[Event]:
                         note_num=_get_note_num(
                             _PITCH_CLASSES[event_str[0]], int(event_str[1])
                         ),
-                        velocity=_get_velocity(event_str[2]),
+                        velocity=get_velocity(event_str[2]),
                         dur=Half,
                     )
                 ),
@@ -210,7 +250,7 @@ def _parse_note(event_str: str, dur: Duration) -> list[Event]:
                     note_num=_get_note_num(
                         _PITCH_CLASSES[event_str[0]] + 1, int(event_str[2])
                     ),
-                    velocity=_get_velocity(event_str[3]),
+                    velocity=get_velocity(event_str[3]),
                     dur=Half,
                 )
             ),
@@ -229,13 +269,13 @@ def _parse(event_str: str, dur: Duration) -> list[Event]:
         return [
             Event(action="Rest", dur=dur),
         ]
-    assert event_str[0] in _VELOCITY_TOKENS
+    assert event_str[0] in _VELOCITY_TOKENS, event_str
     return [
         Event(
             action=Note(
                 Note.Params(
                     note_num=_DEFAULT_NOTE,
-                    velocity=_get_velocity(event_str[0]),
+                    velocity=get_velocity(event_str[0]),
                     dur=Half,
                 )
             ),
@@ -266,19 +306,34 @@ def _transform(groups_tree: _Group, length_bars: Duration) -> list[Event]:
     return events
 
 
-def _get_subgroups_r(group: _Group, tokens: list[str]) -> list[str]:
+def _remove_leading(tokens: list[str], undesired: set[str]) -> list[str]:
+    for idx, char in enumerate(tokens):
+        if char in undesired:
+            continue
+        return tokens[idx + 1 :]
+    return tokens
+
+
+def _get_subgroups_r(
+    group: Union[_Alternation, _Group], tokens: list[str]
+) -> list[str]:
     if len(tokens) == 0:
         return []
     tok = tokens[0]
     remainder: list[str] = []
     if tok == "[":
-        child = _Group(children=[])
-        remainder = _get_subgroups_r(child, tokens[1:])
-        group.children.append(child)
-        if len(remainder) > 0:
-            group.children += remainder
-        return []
+        child_g = _Group(children=[])
+        remainder = _get_subgroups_r(child_g, tokens[1:])
+        group.children.append(child_g)
+        return _get_subgroups_r(group, remainder)
     elif tok == "]":
+        return tokens[1:]
+    elif tok == "<":
+        child_a = _Alternation(children=[])
+        remainder = _get_subgroups_r(child_a, tokens[1:])
+        group.children.append(child_a)
+        return _get_subgroups_r(group, remainder)
+    elif tok == ">":
         return tokens[1:]
     elif _EMPTY_PATTERN.match(tok):
         _get_subgroups_r(group, tokens[1:])
@@ -296,9 +351,11 @@ def _get_groups(definition: str) -> _Group:
     if (definition[0] != "[") or (definition[-1] != "]"):
         raise InvalidSyntaxError()
     try:
-        _get_subgroups_r(root, _separate_delimiters(definition[1:-1].split()))
+        sepd = _separate_delimiters(definition[1:-1].split())
+        _get_subgroups_r(root, sepd)
     except InvalidSyntaxError:
         raise
+    _expand_group_alternations(root)
     return root
 
 
@@ -359,6 +416,7 @@ def _parse_pattern(
     length_bars: Duration = Duration(1, 1),
 ) -> list[Event]:
     groups_tree = _get_groups(definition)
+    print(f"=============== {groups_tree}")
     return _transform(groups_tree, length_bars)
 
 

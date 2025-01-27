@@ -9,6 +9,7 @@ from livecoding.scales_v2 import (
     _Group,
     _get_subgroups_r as get_subgroups_r,
     _separate_delimiters as separate_delimiters,
+    get_velocity,
     rhythm_v2,
 )
 
@@ -313,19 +314,169 @@ def test_rhythm_v2_grammar_patterns_with_tie_sugar() -> None:
     )
 
 
-# def test_rhythm_v2_grammar_patterns_with_alternation() -> None:
-#     pattern = rhythm_v2("[Cy <Gw Ex>]") | name("foo")
-#     assert pattern == PluginPattern(
-#         length_bars=Bar,
-#         events=[
-#             Event(
-#                 action=Note(Note.Params(note_num=60, velocity=0.96, dur=Half)),
-#                 dur=(Bar / 3) * 2,
-#             ),
-#             Event(
-#                 action=Note(Note.Params(note_num=67, velocity=0.88, dur=Half)),
-#                 dur=Bar / 3,
-#             ),
-#         ],
-#         name="foo",
-#     )
+def test_rhythm_v2_grammar_patterns_with_alternation1() -> None:
+    pattern = rhythm_v2("[Cy <Gw Ex>]") | name("foo")
+    assert pattern == PluginPattern(
+        length_bars=Bar,
+        events=[
+            Event(
+                action=Note(Note.Params(note_num=60, velocity=0.96, dur=Half)),
+                dur=Bar / 4,
+            ),
+            Event(
+                action=Note(Note.Params(note_num=67, velocity=0.88, dur=Half)),
+                dur=Bar / 4,
+            ),
+            Event(
+                action=Note(Note.Params(note_num=60, velocity=0.96, dur=Half)),
+                dur=Bar / 4,
+            ),
+            Event(
+                action=Note(Note.Params(note_num=64, velocity=0.92, dur=Half)),
+                dur=Bar / 4,
+            ),
+        ],
+        name="foo",
+    )
+
+
+def test_rhythm_v2_grammar_patterns_with_alternation2() -> None:
+    pattern = rhythm_v2("[Cy <Gw Ex <Fd Ap>>]") | name("foo")
+    print(pattern)
+    assert pattern == PluginPattern(
+        length_bars=Bar,
+        events=[
+            Event(
+                action=Note(
+                    Note.Params(note_num=60, velocity=get_velocity("y"), dur=Half)
+                ),
+                dur=Bar / 10,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=67, velocity=get_velocity("w"), dur=Half)
+                ),
+                dur=Bar / 10,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=60, velocity=get_velocity("y"), dur=Half)
+                ),
+                dur=Bar / 10,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=64, velocity=get_velocity("x"), dur=Half)
+                ),
+                dur=Bar / 10,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=60, velocity=get_velocity("y"), dur=Half)
+                ),
+                dur=Bar / 10,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=65, velocity=get_velocity("d"), dur=Half)
+                ),
+                dur=Bar / 10,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=60, velocity=get_velocity("y"), dur=Half)
+                ),
+                dur=Bar / 10,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=64, velocity=get_velocity("x"), dur=Half)
+                ),
+                dur=Bar / 10,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=60, velocity=get_velocity("y"), dur=Half)
+                ),
+                dur=Bar / 10,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=69, velocity=get_velocity("p"), dur=Half)
+                ),
+                dur=Bar / 10,
+            ),
+        ],
+        name="foo",
+    )
+
+
+def test_rhythm_v2_grammar_patterns_with_alternation3() -> None:
+    pattern = rhythm_v2("[Cy <[Gw Ex] <Fd Ap>>]") | name("foo")
+    print(pattern)
+    assert pattern == PluginPattern(
+        length_bars=Bar,
+        events=[
+            Event(
+                action=Note(
+                    Note.Params(note_num=60, velocity=get_velocity("y"), dur=Half)
+                ),
+                dur=Bar / 8,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=67, velocity=get_velocity("w"), dur=Half)
+                ),
+                dur=Bar / 16,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=64, velocity=get_velocity("x"), dur=Half)
+                ),
+                dur=Bar / 16,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=60, velocity=get_velocity("y"), dur=Half)
+                ),
+                dur=Bar / 8,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=65, velocity=get_velocity("d"), dur=Half)
+                ),
+                dur=Bar / 8,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=60, velocity=get_velocity("y"), dur=Half)
+                ),
+                dur=Bar / 8,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=67, velocity=get_velocity("w"), dur=Half)
+                ),
+                dur=Bar / 16,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=64, velocity=get_velocity("x"), dur=Half)
+                ),
+                dur=Bar / 16,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=60, velocity=get_velocity("y"), dur=Half)
+                ),
+                dur=Bar / 8,
+            ),
+            Event(
+                action=Note(
+                    Note.Params(note_num=69, velocity=get_velocity("p"), dur=Half)
+                ),
+                dur=Bar / 8,
+            ),
+        ],
+        name="foo",
+    )
