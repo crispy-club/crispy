@@ -20,7 +20,7 @@ jobs:
           uv run invoke build
       - name: Build test coverage file
         run: |
-          pytest --cov=livecoding
+          uv run pytest --cov=livecoding
       - name: Upload coverage reports to Codecov (python)
         uses: codecov/codecov-action@main
         with:
