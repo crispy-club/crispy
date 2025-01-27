@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from livecoding.base_types import Bar, Ctrl, Duration, Event, PluginPattern, Sixteenth
-from livecoding.pattern import name
+from livecoding.filters import name
 from livecoding.plugin import play
 from livecoding.util import random_name
 

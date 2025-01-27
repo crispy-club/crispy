@@ -1,16 +1,14 @@
 import pytest
 
 from livecoding.base_types import Bar, Event, Half, Note, PluginPattern
-from livecoding.pattern import name
-
-# from livecoding.scales_v2 import _SUBGROUPS_REGEX as subgroups_regex, rhythm_v2
-from livecoding.scales_v2 import (
+from livecoding.filters import name
+from livecoding.pat import (
     InvalidSyntaxError,
     _Group,
     _get_subgroups_r as get_subgroups_r,
     _separate_delimiters as separate_delimiters,
     get_velocity,
-    rhythm_v2,
+    pat,
 )
 
 
@@ -69,22 +67,22 @@ def test_get_subgroups_r_nested() -> None:
     assert group == _Group(children=["C", _Group(children=["E", "A"]), "G"])
 
 
-def test_rhythm_v2_empty_pattern() -> None:
+def test_pat_empty_pattern() -> None:
     empty = PluginPattern(
         events=[],
         length_bars=Bar,
         name="foo",
     )
-    pattern = rhythm_v2("[]") | name("foo")
+    pattern = pat("[]") | name("foo")
     assert pattern == empty
 
 
-def test_rhythm_v2_single_opening_bracket() -> None:
+def test_pat_single_opening_bracket() -> None:
     with pytest.raises(InvalidSyntaxError):
-        _ = rhythm_v2("[")
+        _ = pat("[")
 
 
-def test_rhythm_v2_one_note() -> None:
+def test_pat_one_note() -> None:
     expect = PluginPattern(
         events=[
             Event(
@@ -95,11 +93,11 @@ def test_rhythm_v2_one_note() -> None:
         length_bars=Bar,
         name="foo",
     )
-    pattern = rhythm_v2("[C]") | name("foo")
+    pattern = pat("[C]") | name("foo")
     assert pattern == expect, str(pattern)
 
 
-def test_rhythm_v2_three_notes() -> None:
+def test_pat_three_notes() -> None:
     expect = PluginPattern(
         events=[
             Event(
@@ -118,11 +116,11 @@ def test_rhythm_v2_three_notes() -> None:
         length_bars=Bar,
         name="foo",
     )
-    pattern = rhythm_v2("[C E G]") | name("foo")
+    pattern = pat("[C E G]") | name("foo")
     assert pattern == expect, str(pattern)
 
 
-def test_rhythm_v2_nested_groups() -> None:
+def test_pat_nested_groups() -> None:
     expect = PluginPattern(
         events=[
             Event(
@@ -141,12 +139,12 @@ def test_rhythm_v2_nested_groups() -> None:
         length_bars=Bar,
         name="foo",
     )
-    pattern = rhythm_v2("[C [E G]]") | name("foo")
+    pattern = pat("[C [E G]]") | name("foo")
     assert pattern == expect, str(pattern)
 
 
-def test_rhythm_v2_single_velocity_value() -> None:
-    pattern = rhythm_v2("[a]") | name("foo")
+def test_pat_single_velocity_value() -> None:
+    pattern = pat("[a]") | name("foo")
     assert pattern == PluginPattern(
         events=[
             Event(
@@ -158,8 +156,8 @@ def test_rhythm_v2_single_velocity_value() -> None:
     )
 
 
-def test_rhythm_v2_single_pitch_class_value() -> None:
-    pattern = rhythm_v2("[C]") | name("foo")
+def test_pat_single_pitch_class_value() -> None:
+    pattern = pat("[C]") | name("foo")
     assert pattern == PluginPattern(
         events=[
             Event(
@@ -171,8 +169,8 @@ def test_rhythm_v2_single_pitch_class_value() -> None:
     )
 
 
-def test_rhythm_v2_single_pitch_class_with_octave() -> None:
-    pattern = rhythm_v2("[C1]") | name("foo")
+def test_pat_single_pitch_class_with_octave() -> None:
+    pattern = pat("[C1]") | name("foo")
     assert pattern == PluginPattern(
         events=[
             Event(
@@ -184,8 +182,8 @@ def test_rhythm_v2_single_pitch_class_with_octave() -> None:
     )
 
 
-def test_rhythm_v2_single_sharp_pitch_class_with_octave() -> None:
-    pattern = rhythm_v2("[C'1]") | name("foo")
+def test_pat_single_sharp_pitch_class_with_octave() -> None:
+    pattern = pat("[C'1]") | name("foo")
     assert pattern == PluginPattern(
         events=[
             Event(
@@ -197,8 +195,8 @@ def test_rhythm_v2_single_sharp_pitch_class_with_octave() -> None:
     )
 
 
-def test_rhythm_v2_single_pitch_class_sharp_with_octave_and_velocity() -> None:
-    pattern = rhythm_v2("[C'1w]") | name("foo")
+def test_pat_single_pitch_class_sharp_with_octave_and_velocity() -> None:
+    pattern = pat("[C'1w]") | name("foo")
     assert pattern == PluginPattern(
         events=[
             Event(
@@ -210,8 +208,8 @@ def test_rhythm_v2_single_pitch_class_sharp_with_octave_and_velocity() -> None:
     )
 
 
-def test_rhythm_v2_two_velocities() -> None:
-    pattern = rhythm_v2("[w x]") | name("foo")
+def test_pat_two_velocities() -> None:
+    pattern = pat("[w x]") | name("foo")
     assert pattern == PluginPattern(
         events=[
             Event(
@@ -228,8 +226,8 @@ def test_rhythm_v2_two_velocities() -> None:
     )
 
 
-def test_rhythm_v2_two_notes() -> None:
-    pattern = rhythm_v2("[Cw Dx]") | name("foo")
+def test_pat_two_notes() -> None:
+    pattern = pat("[Cw Dx]") | name("foo")
     assert pattern == PluginPattern(
         events=[
             Event(
@@ -246,8 +244,8 @@ def test_rhythm_v2_two_notes() -> None:
     )
 
 
-def test_rhythm_v2_grammar_pattern_with_rests_repeated_grouping() -> None:
-    pattern = rhythm_v2("[y .;2]") | name("foo")
+def test_pat_grammar_pattern_with_rests_repeated_grouping() -> None:
+    pattern = pat("[y .;2]") | name("foo")
     assert pattern == PluginPattern(
         length_bars=Bar,
         events=[
@@ -262,8 +260,8 @@ def test_rhythm_v2_grammar_pattern_with_rests_repeated_grouping() -> None:
     )
 
 
-def test_rhythm_v2_grammar_pattern_with_rests_repeated_without_grouping() -> None:
-    pattern = rhythm_v2("[y .:2]") | name("foo")
+def test_pat_grammar_pattern_with_rests_repeated_without_grouping() -> None:
+    pattern = pat("[y .:2]") | name("foo")
     assert pattern == PluginPattern(
         length_bars=Bar,
         events=[
@@ -278,8 +276,8 @@ def test_rhythm_v2_grammar_pattern_with_rests_repeated_without_grouping() -> Non
     )
 
 
-def test_rhythm_v2_grammar_patterns_with_ties() -> None:
-    pattern = rhythm_v2("[Cy _:3 Gw _]") | name("foo")
+def test_pat_grammar_patterns_with_ties() -> None:
+    pattern = pat("[Cy _:3 Gw _]") | name("foo")
     assert pattern == PluginPattern(
         length_bars=Bar,
         events=[
@@ -296,8 +294,8 @@ def test_rhythm_v2_grammar_patterns_with_ties() -> None:
     )
 
 
-def test_rhythm_v2_grammar_patterns_with_tie_sugar() -> None:
-    pattern = rhythm_v2("[Cy@4 Gw _]") | name("foo")
+def test_pat_grammar_patterns_with_tie_sugar() -> None:
+    pattern = pat("[Cy@4 Gw _]") | name("foo")
     assert pattern == PluginPattern(
         length_bars=Bar,
         events=[
@@ -314,8 +312,8 @@ def test_rhythm_v2_grammar_patterns_with_tie_sugar() -> None:
     )
 
 
-def test_rhythm_v2_grammar_patterns_with_alternation1() -> None:
-    pattern = rhythm_v2("[Cy <Gw Ex>]") | name("foo")
+def test_pat_grammar_patterns_with_alternation1() -> None:
+    pattern = pat("[Cy <Gw Ex>]") | name("foo")
     assert pattern == PluginPattern(
         length_bars=Bar,
         events=[
@@ -340,8 +338,8 @@ def test_rhythm_v2_grammar_patterns_with_alternation1() -> None:
     )
 
 
-def test_rhythm_v2_grammar_patterns_with_alternation2() -> None:
-    pattern = rhythm_v2("[Cy <Gw Ex <Fd Ap>>]") | name("foo")
+def test_pat_grammar_patterns_with_alternation2() -> None:
+    pattern = pat("[Cy <Gw Ex <Fd Ap>>]") | name("foo")
     print(pattern)
     assert pattern == PluginPattern(
         length_bars=Bar,
@@ -411,8 +409,8 @@ def test_rhythm_v2_grammar_patterns_with_alternation2() -> None:
     )
 
 
-def test_rhythm_v2_grammar_patterns_with_alternation3() -> None:
-    pattern = rhythm_v2("[Cy <[Gw Ex] <Fd Ap>>]") | name("foo")
+def test_pat_grammar_patterns_with_alternation3() -> None:
+    pattern = pat("[Cy <[Gw Ex] <Fd Ap>>]") | name("foo")
     print(pattern)
     assert pattern == PluginPattern(
         length_bars=Bar,

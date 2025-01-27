@@ -1,6 +1,6 @@
 from livecoding.base_types import Bar, Duration, Event, Note
-from livecoding.notes_grammar import notes
-from livecoding.pattern import name, resize
+from livecoding.filters import name, resize
+from livecoding.pat import pat
 
 
 def test_duration_add() -> None:
@@ -74,27 +74,19 @@ def test_note_json() -> None:
 
 
 def test_note_pattern_json() -> None:
-    pattern = notes("[c3]") | name("foo")
+    pattern = pat("[C3]") | name("foo")
     assert (
         pattern.json()
-        == """{"name":"foo","events":[{"action":{"NoteEvent":{"note_num":60,"velocity":0.8,"dur":{"num":1,"den":2}}},"dur":{"num":1,"den":1}}],"length_bars":{"num":1,"den":1}}"""
-    )
-
-
-def test_ctrl_pattern_json() -> None:
-    pattern = notes("[c3]") | name("foo")
-    assert (
-        pattern.json()
-        == """{"name":"foo","events":[{"action":{"NoteEvent":{"note_num":60,"velocity":0.8,"dur":{"num":1,"den":2}}},"dur":{"num":1,"den":1}}],"length_bars":{"num":1,"den":1}}"""
+        == """{"name":"foo","events":[{"action":{"NoteEvent":{"note_num":60,"velocity":0.58,"dur":{"num":1,"den":2}}},"dur":{"num":1,"den":1}}],"length_bars":{"num":1,"den":1}}"""
     )
 
 
 def test_pattern_add() -> None:
-    (notes("[c3]") + notes("[e3]")) | name("foo") == (
-        notes("[c3 e3]") | resize(Bar * 2) | name("foo")
+    (pat("[c3]") + pat("[e3]")) | name("foo") == (
+        pat("[c3 e3]") | resize(Bar * 2) | name("foo")
     )
 
 
 def test_pattern_mul() -> None:
-    foo = notes("[c3]") | name("foo")
-    assert foo * 3 == (notes("[c3 c3 c3]") | resize(Bar * 3) | name("foo"))
+    foo = pat("[c3]") | name("foo")
+    assert foo * 3 == (pat("[c3 c3 c3]") | resize(Bar * 3) | name("foo"))

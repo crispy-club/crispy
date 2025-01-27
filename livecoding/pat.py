@@ -1,26 +1,3 @@
-# * Alternation, i.e. the equivalent of "()" in FoxDot and "<>" in tidal.
-# * Need a way to play multiple notes at once, probably with "()" (or maybe "+" if we're using "()" for alternation)
-#
-# All of this is great for the next iteration of the pattern language, but we're
-# still left with the question of how to handle scales.
-# I already have a lot of scales defined in a way that they can be indexed with an int.
-# How can I leverage those with the new pattern definition I've implemented?
-# What could be cool is to have a way to snap any pitch value to the value it is
-# closest to from a given scale.
-# So if I define a note pattern
-#
-# re: alternation
-# Can this be recursive?
-# What would this pattern expand to?
-#    [Cy <Gw Ex <Fd Ap>>]
-# -> [Cy <Gw Ex Fd Ex Ap>]
-# -> [Cy Gw Cy Ex Cy Fd Cy Ex Cy Ap]
-#
-# What would this pattern expand to?
-#    [Cy <[Gw Ex] <Fd Ap>>]
-# -> [Cy <[Gw Ex] Fd [Gw Ex] Ap>]
-# -> [Cy [Gw Ex] Cy Fd Cy [Gw Ex] Cy Ap>]
-#
 import copy
 import re
 from dataclasses import dataclass
@@ -416,11 +393,10 @@ def _parse_pattern(
     length_bars: Duration = Duration(1, 1),
 ) -> list[Event]:
     groups_tree = _get_groups(definition)
-    print(f"=============== {groups_tree}")
     return _transform(groups_tree, length_bars)
 
 
-def rhythm_v2(
+def pat(
     definition: str,
     length_bars: Duration = Duration(1, 1),
 ) -> PluginPattern:

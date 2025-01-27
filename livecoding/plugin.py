@@ -5,7 +5,7 @@ from typing import Any
 import requests
 
 from livecoding.base_types import PluginPattern, Zero
-from livecoding.pattern import name
+from livecoding.filters import name
 
 
 @dataclass(slots=True)
