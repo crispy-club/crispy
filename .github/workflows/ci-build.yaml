@@ -20,12 +20,13 @@ jobs:
           uv run invoke build
       - name: Build test coverage file
         run: |
-          pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov=livecoding | tee pytest-coverage.txt
-      - name: Pytest coverage comment
-        uses: MishaKav/pytest-coverage-comment@main
+          pytest --cov=livecoding
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@main
         with:
-          pytest-coverage-path: ./pytest-coverage.txt
-          junitxml-path: ./pytest.xml
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
   build_plugin:
     name: Build Plugin
     runs-on: ubuntu-latest
