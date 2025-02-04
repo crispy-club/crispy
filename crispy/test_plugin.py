@@ -4,81 +4,101 @@ from unittest import mock
 import pytest
 from requests.exceptions import HTTPError
 
-from livecoding.base_types import Duration, Event, Note, PluginPattern
-from livecoding.notes_grammar import notes
-from livecoding.pattern import name
-from livecoding.plugin import ch2, play
+from crispy.base_types import Duration, Event, Note, PluginPattern
+from crispy.filters import name
+from crispy.pat import pat
+from crispy.plugin import ch2, play
 
 
-def test_livecoding_duration_addition() -> None:
+def test_crispy_duration_addition() -> None:
     sixteenth = Duration(1, 16)
     assert sixteenth + sixteenth == Duration(1, 8)
 
 
-def test_livecoding_duration_mult() -> None:
+def test_crispy_duration_mult() -> None:
     assert Duration(1, 16) * Duration(2, 3) == Duration(1, 24)
 
 
-def test_livecoding_duration_division() -> None:
+def test_crispy_duration_division() -> None:
     assert Duration(1, 16) / Duration(2, 3) == Duration(3, 32)
 
 
-def test_notes_simple() -> None:
-    pattern = notes("[c1 d#1 g1 c2]") | name("bassline")
+def test_pat_simple() -> None:
+    pattern = pat("[C1 D'1 G1 C2]") | name("bassline")
     print(pattern)
     assert pattern == PluginPattern(
         name="bassline",
         length_bars=Duration(1, 1),
         events=[
             Event(
-                action=Note(Note.Params(note_num=36, velocity=0.8, dur=Duration(1, 2))),
+                action=Note(
+                    Note.Params(note_num=36, velocity=0.58, dur=Duration(1, 2))
+                ),
                 dur=Duration(1, 4),
             ),
             Event(
-                action=Note(Note.Params(note_num=39, velocity=0.8, dur=Duration(1, 2))),
+                action=Note(
+                    Note.Params(note_num=39, velocity=0.58, dur=Duration(1, 2))
+                ),
                 dur=Duration(1, 4),
             ),
             Event(
-                action=Note(Note.Params(note_num=43, velocity=0.8, dur=Duration(1, 2))),
+                action=Note(
+                    Note.Params(note_num=43, velocity=0.58, dur=Duration(1, 2))
+                ),
                 dur=Duration(1, 4),
             ),
             Event(
-                action=Note(Note.Params(note_num=48, velocity=0.8, dur=Duration(1, 2))),
+                action=Note(
+                    Note.Params(note_num=48, velocity=0.58, dur=Duration(1, 2))
+                ),
                 dur=Duration(1, 4),
             ),
         ],
     )
 
 
-def test_notes_nested() -> None:
-    pattern = notes("[c1 [d#1 c1 d#1] g1 c2]") | name("bassline")
+def test_pat_nested() -> None:
+    pattern = pat("[C1 [D'1 C1 D'1] G1 C2]") | name("bassline")
     print(pattern)
     assert pattern == PluginPattern(
         name="bassline",
         length_bars=Duration(1, 1),
         events=[
             Event(
-                action=Note(Note.Params(note_num=36, velocity=0.8, dur=Duration(1, 2))),
+                action=Note(
+                    Note.Params(note_num=36, velocity=0.58, dur=Duration(1, 2))
+                ),
                 dur=Duration(1, 4),
             ),
             Event(
-                action=Note(Note.Params(note_num=39, velocity=0.8, dur=Duration(1, 2))),
+                action=Note(
+                    Note.Params(note_num=39, velocity=0.58, dur=Duration(1, 2))
+                ),
                 dur=Duration(1, 12),
             ),
             Event(
-                action=Note(Note.Params(note_num=36, velocity=0.8, dur=Duration(1, 2))),
+                action=Note(
+                    Note.Params(note_num=36, velocity=0.58, dur=Duration(1, 2))
+                ),
                 dur=Duration(1, 12),
             ),
             Event(
-                action=Note(Note.Params(note_num=39, velocity=0.8, dur=Duration(1, 2))),
+                action=Note(
+                    Note.Params(note_num=39, velocity=0.58, dur=Duration(1, 2))
+                ),
                 dur=Duration(1, 12),
             ),
             Event(
-                action=Note(Note.Params(note_num=43, velocity=0.8, dur=Duration(1, 2))),
+                action=Note(
+                    Note.Params(note_num=43, velocity=0.58, dur=Duration(1, 2))
+                ),
                 dur=Duration(1, 4),
             ),
             Event(
-                action=Note(Note.Params(note_num=48, velocity=0.8, dur=Duration(1, 2))),
+                action=Note(
+                    Note.Params(note_num=48, velocity=0.58, dur=Duration(1, 2))
+                ),
                 dur=Duration(1, 4),
             ),
         ],
@@ -94,7 +114,7 @@ def test_plugin_play_note_pattern_error(mock_post: mock.Mock) -> None:
     mock_post.return_value = mock_resp
 
     with pytest.raises(HTTPError) as herr:
-        play(notes("[c1 [d#1 c1 d#1] g1 c2]") | name("bassline"))
+        play(pat("[C1 [D'1 C1 D'1] G1 C2]") | name("bassline"))
 
     assert str(herr.value) == "invalid pattern"
 
@@ -104,7 +124,7 @@ def test_plugin_play_note_pattern_on_channel2(mock_post: mock.Mock) -> None:
     mock_resp = mock.Mock()
     mock_resp.status_code = 201
     mock_post.return_value = mock_resp
-    ch2 << (notes("[c1 g1]") | name("bassline"))
+    ch2 << (pat("[C1 G1]") | name("bassline"))
     mock_post.assert_called_with(
         "http://127.0.0.1:3000/start/ch2",
         headers={"Content-Type": "application/json"},
@@ -115,7 +135,7 @@ def test_plugin_play_note_pattern_on_channel2(mock_post: mock.Mock) -> None:
                         "action": {
                             "NoteEvent": {
                                 "note_num": 36,
-                                "velocity": 0.8,
+                                "velocity": 0.58,
                                 "dur": {"num": 1, "den": 2},
                             },
                         },
@@ -125,7 +145,7 @@ def test_plugin_play_note_pattern_on_channel2(mock_post: mock.Mock) -> None:
                         "action": {
                             "NoteEvent": {
                                 "note_num": 43,
-                                "velocity": 0.8,
+                                "velocity": 0.58,
                                 "dur": {"num": 1, "den": 2},
                             },
                         },

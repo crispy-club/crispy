@@ -3,18 +3,19 @@ from dataclasses import dataclass
 
 import click
 
-from livecoding.base_types import PluginPattern
-from livecoding.notes_grammar import notes
-from livecoding.notes import NoteNumbers
-from livecoding.pattern import name, perc
-from livecoding.plugin import play, stop
+from crispy.base_types import PluginPattern
+from crispy.filters import name
+from crispy.notes import NoteNumbers
+from crispy.pat import pat as _pat
+from crispy.perc import perc as _perc
+from crispy.plugin import play, stop
 
 
 @dataclass(slots=True)
 class Melody:
     def parse(self, line: str) -> PluginPattern:
         _name, definition = line.strip().split("=")
-        return notes(definition) | name(_name.strip())
+        return _pat(definition) | name(_name.strip())
 
 
 @click.group
@@ -36,12 +37,12 @@ def silence(name: str | None, notes: bool) -> None:
 
 
 @cli.command()
-def percussion() -> None:
-    play(*perc(sys.stdin.read()))
+def perc() -> None:
+    play(*_perc(sys.stdin.read()))
 
 
 @cli.command()
-def melody() -> None:
+def pat() -> None:
     melody = Melody()
     for line in map(lambda ln: ln.strip(), sys.stdin):
         pattern = melody.parse(line)

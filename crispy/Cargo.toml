@@ -1,5 +1,5 @@
 [package]
-name = "livecoding"
+name = "crispy"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.80"
@@ -8,7 +8,7 @@ license = "ISC"
 
 keywords = ["midi", "plugin", "livecoding", "algorave"]
 description = "A sample-accurate livecoding MIDI event sequencer"
-repository = "https://github.com/briansorahan/live"
+repository = "https://github.com/briansorahan/crispy"
 
 [dependencies]
 axum = { version = "0.7.9", features = ["json", "macros", "tokio"] }

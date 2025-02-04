@@ -7,11 +7,8 @@ from .base_types import (
     Rest as Rest,
     Zero as Zero,
 )
-from .notes_grammar import (
-    notes as notes,
-)
 from .notes import NoteNumbers as NoteNumbers
-from .pattern import (
+from .filters import (
     ladd as ladd,
     radd as radd,
     lclip as lclip,
@@ -21,10 +18,11 @@ from .pattern import (
     tran as tran,
     resize as resize,
     name as name,
-    perc as perc,
     each as each,
     each_note as each_note,
 )
+from .perc import perc as perc
+
 from .pitches import (
     C as C,
     D as D,
@@ -55,7 +53,6 @@ from .plugin import (
     play as play,
     stop as stop,
 )
-from .rhythm_grammar import rhythm as rhythm
 from .scales import (
     Acoustic as Acoustic,
     Altered as Altered,

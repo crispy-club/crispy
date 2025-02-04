@@ -1,5 +1,5 @@
-from livecoding.ctrl import CCEvent, ccp
-from livecoding.pattern import name
+from crispy.ctrl import CCEvent, ccp
+from crispy.filters import name
 
 
 def test_plugin_cc_pattern_json() -> None:

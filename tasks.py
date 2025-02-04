@@ -21,15 +21,15 @@ def code_style(ctx):
 
 
 @task
-def mypy_livecoding(ctx):
-    cmd = f"mypy --config-file {MYPY_CONFIG} {os.path.join(DIRNAME, 'livecoding')}"
+def mypy_crispy(ctx):
+    cmd = f"mypy --config-file {MYPY_CONFIG} {os.path.join(DIRNAME, 'crispy')}"
     print(cmd)
     ctx.run(cmd)
 
 
 @task
 def pytest(ctx):
-    cmd = f"pytest --color=yes --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov=livecoding {DIRNAME}"
+    cmd = f"pytest --color=yes --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov=crispy {DIRNAME}"
     print(cmd)
     ctx.run(cmd)
 
@@ -37,7 +37,7 @@ def pytest(ctx):
 @task(
     code_style,
     linters,
-    mypy_livecoding,
+    mypy_crispy,
     pytest,
 )
 def build(_):
