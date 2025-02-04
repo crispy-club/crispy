@@ -6,7 +6,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Callable
 
-from livecoding.base_types import (
+from crispy.base_types import (
     Duration,
     Event,
     Note,

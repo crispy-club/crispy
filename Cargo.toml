@@ -8,12 +8,12 @@ license = "ISC"
 
 keywords = ["midi", "plugin", "livecoding", "algorave"]
 description = "A sample-accurate livecoding MIDI event sequencer"
-repository = "https://github.com/briansorahan/live"
+repository = "https://github.com/briansorahan/crispy"
 
 [workspace]
 members = [
   "xtask",
-  "livecoding",
+  "crispy",
 ]
 
 [dependencies]

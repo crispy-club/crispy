@@ -4,8 +4,8 @@ from typing import Any
 
 import requests
 
-from livecoding.base_types import PluginPattern, Zero
-from livecoding.filters import name
+from crispy.base_types import PluginPattern, Zero
+from crispy.filters import name
 
 
 @dataclass(slots=True)

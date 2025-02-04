@@ -1,6 +1,6 @@
-from livecoding.base_types import Bar, Duration, Event, Note
-from livecoding.filters import name, resize
-from livecoding.pat import pat
+from crispy.base_types import Bar, Duration, Event, Note
+from crispy.filters import name, resize
+from crispy.pat import pat
 
 
 def test_duration_add() -> None:

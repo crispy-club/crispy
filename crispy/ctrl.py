@@ -2,10 +2,10 @@ import itertools
 from dataclasses import dataclass
 from typing import Iterable
 
-from livecoding.base_types import Bar, Ctrl, Duration, Event, PluginPattern, Sixteenth
-from livecoding.filters import name
-from livecoding.plugin import play
-from livecoding.util import random_name
+from crispy.base_types import Bar, Ctrl, Duration, Event, PluginPattern, Sixteenth
+from crispy.filters import name
+from crispy.plugin import play
+from crispy.util import random_name
 
 
 @dataclass(slots=True)

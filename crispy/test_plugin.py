@@ -4,22 +4,22 @@ from unittest import mock
 import pytest
 from requests.exceptions import HTTPError
 
-from livecoding.base_types import Duration, Event, Note, PluginPattern
-from livecoding.filters import name
-from livecoding.pat import pat
-from livecoding.plugin import ch2, play
+from crispy.base_types import Duration, Event, Note, PluginPattern
+from crispy.filters import name
+from crispy.pat import pat
+from crispy.plugin import ch2, play
 
 
-def test_livecoding_duration_addition() -> None:
+def test_crispy_duration_addition() -> None:
     sixteenth = Duration(1, 16)
     assert sixteenth + sixteenth == Duration(1, 8)
 
 
-def test_livecoding_duration_mult() -> None:
+def test_crispy_duration_mult() -> None:
     assert Duration(1, 16) * Duration(2, 3) == Duration(1, 24)
 
 
-def test_livecoding_duration_division() -> None:
+def test_crispy_duration_division() -> None:
     assert Duration(1, 16) / Duration(2, 3) == Duration(3, 32)
 
 

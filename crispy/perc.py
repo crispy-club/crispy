@@ -2,8 +2,8 @@ import functools
 import operator
 from dataclasses import dataclass
 
-from livecoding.base_types import Event, Half, Note, PluginPattern, Sixteenth, Zero
-from livecoding.notes import NoteNumbers
+from crispy.base_types import Event, Half, Note, PluginPattern, Sixteenth, Zero
+from crispy.notes import NoteNumbers
 
 
 @dataclass(slots=True)

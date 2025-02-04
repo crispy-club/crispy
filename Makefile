@@ -1,6 +1,6 @@
 test:
 	uv run invoke build
-	cargo test --package livecoding
+	cargo test --package crispy
 
 plugin:
-	cargo xtask bundle livecoding --release
+	cargo xtask bundle crispy --release

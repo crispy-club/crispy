@@ -1,8 +1,8 @@
 import pytest
 
-from livecoding.base_types import Bar, Event, Half, Note, PluginPattern
-from livecoding.filters import name
-from livecoding.pat import (
+from crispy.base_types import Bar, Event, Half, Note, PluginPattern
+from crispy.filters import name
+from crispy.pat import (
     InvalidSyntaxError,
     _Group,
     _get_subgroups_r as get_subgroups_r,
