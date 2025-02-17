@@ -1,7 +1,7 @@
 use crate::controller::{start_pattern, stop_pattern, Command, Controller};
+use crate::dur::Dur;
 use crate::pattern::{
-    FractionalDuration, NamedPattern, NoteType, Pattern, PreciseEventType, PrecisePattern,
-    SimpleNoteEvent,
+    NamedPattern, NoteType, Pattern, PreciseEventType, PrecisePattern, SimpleNoteEvent,
 };
 use axum::{routing::post, Router};
 use nih_plug::prelude::*;
@@ -124,9 +124,7 @@ impl Live {
         named_pattern: NamedPattern,
     ) -> Result<(), Box<dyn Error>> {
         let transport = context.transport();
-        let pattern_length = named_pattern
-            .length_bars
-            .or(Some(FractionalDuration { num: 1, den: 1 }));
+        let pattern_length = named_pattern.length_bars.or(Some(Dur { num: 1, den: 1 }));
         let precise_pattern = PrecisePattern::from(
             &mut Pattern {
                 channel: Some(named_pattern.channel),
