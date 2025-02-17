@@ -14,6 +14,7 @@ repository = "https://github.com/briansorahan/crispy"
 axum = { version = "0.7.9", features = ["json", "macros", "tokio"] }
 axum-macros = "0.4.2"
 axum-test = "16.4.1"
+logos = "0.15.0"
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs"] }
 num = "0.4.3"
 rtrb = "0.3.1"
