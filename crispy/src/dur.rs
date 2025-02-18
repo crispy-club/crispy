@@ -3,6 +3,12 @@ use num::integer::lcm;
 use serde::{Deserialize, Serialize};
 use std::ops::{Add, Div, Mul, Sub};
 
+pub static BAR: Dur = Dur { num: 1, den: 1 };
+// static HALF: Dur = Dur::new(1, 2);
+// static QUARTER: Dur = Dur::new(1, 4);
+// static EIGHTH: Dur = Dur::new(1, 8);
+// static SIXTEENTH: Dur = Dur::new(1, 16);
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Dur {
     pub num: i64,
