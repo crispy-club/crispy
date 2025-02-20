@@ -1,6 +1,8 @@
 use crate::dur::Dur;
 use crate::pattern::{Event, Note, Pattern};
 use logos::{Lexer, Logos};
+use regex::Regex;
+use std::sync::LazyLock;
 
 static DEFAULT_OCTAVE: i32 = 3;
 static DEFAULT_VELOCITY: f32 = 0.8;
@@ -21,13 +23,16 @@ fn get_pitch_class(c: char) -> i32 {
     }
 }
 
+static NOTE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^([CDEFGAB])(')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?$").unwrap());
+
 fn note_callback(lex: &mut Lexer<Token>) -> Option<Note> {
-    let note_str = lex.slice();
-    assert!(note_str.len() > 0);
-    let note_num = match note_str.len() {
-        1 => get_pitch_class(note_str.chars().next().unwrap()),
-        _ => 60,
-    };
+    let caps = NOTE_REGEX.captures(lex.slice()).unwrap();
+    assert_eq!(caps.len(), 5);
+    let mut note_num = get_pitch_class(caps[1].chars().next().unwrap());
+    if let Some(sharp) = caps.get(2) {
+        note_num += 1
+    }
     Some(Note {
         note_num: note_num as u8,
         velocity: DEFAULT_VELOCITY,
@@ -42,7 +47,7 @@ enum Token {
     GroupStart,
     #[token("]")]
     GroupEnd,
-    #[regex(r"[CDEFGABC](')?(-2|-1|0|1|2|3|4|5|6|7)?[a-z]?", note_callback)]
+    #[regex(r"[CDEFGAB](')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?", note_callback)]
     NoteExpr(Note),
 }
 
@@ -52,9 +57,9 @@ enum PatternElement {
 }
 
 fn pat(def: &str) -> Result<Pattern, ParseError> {
-    for c in "abcdefghijklmnopqrstuvwxyz".chars() {
-        println!("{:?}.to_digit() {:?}", c, c as u32);
-    }
+    // for c in "abcdefghijklmnopqrstuvwxyz".chars() {
+    //     println!("{:?}.to_digit() {:?}", c, c as u32);
+    // }
     let length_bars = Dur::new(1, 1);
     Ok(Pattern {
         channel: None,
@@ -93,7 +98,7 @@ fn get_groups(def: &str, length_bars: Dur) -> PatternElement {
 #[cfg(test)]
 mod tests {
     use crate::dur::BAR;
-    use crate::mini_notation::pat;
+    use crate::mini_notation::{pat, NOTE_REGEX};
     use crate::pattern::Pattern;
 
     #[test]
@@ -118,5 +123,42 @@ mod tests {
                 events: vec![],
             }),
         );
+    }
+
+    #[test]
+    fn test_note_regex() {
+        let caps = NOTE_REGEX.captures("C'").unwrap();
+        assert_eq!(caps.len(), 5);
+        assert_eq!(&caps[1], "C");
+        assert_eq!(&caps[2], "'");
+
+        let caps = NOTE_REGEX.captures("C3").unwrap();
+        assert_eq!(caps.len(), 5);
+        assert_eq!(&caps[1], "C");
+        assert_eq!(&caps[3], "3");
+
+        let caps = NOTE_REGEX.captures("Cx").unwrap();
+        assert_eq!(caps.len(), 5);
+        assert_eq!(&caps[1], "C");
+        assert_eq!(&caps[4], "x");
+
+        let caps = NOTE_REGEX.captures("C'3").unwrap();
+        assert_eq!(caps.len(), 5);
+        assert_eq!(&caps[1], "C");
+        assert_eq!(&caps[2], "'");
+        assert_eq!(&caps[3], "3");
+
+        let caps = NOTE_REGEX.captures("C'x").unwrap();
+        assert_eq!(caps.len(), 5);
+        assert_eq!(&caps[1], "C");
+        assert_eq!(&caps[2], "'");
+        assert_eq!(&caps[4], "x");
+
+        let caps = NOTE_REGEX.captures("C'3x").unwrap();
+        assert_eq!(caps.len(), 5);
+        assert_eq!(&caps[1], "C");
+        assert_eq!(&caps[2], "'");
+        assert_eq!(&caps[3], "3");
+        assert_eq!(&caps[4], "x");
     }
 }
