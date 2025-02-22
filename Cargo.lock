@@ -330,6 +330,7 @@ dependencies = [
  "logos",
  "nih_plug",
  "num",
+ "pretty_assertions",
  "regex",
  "rtrb",
  "serde",
