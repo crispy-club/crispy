@@ -13,44 +13,6 @@ enum Pelem {
     Group(Vec<Pelem>),
 }
 
-fn transform<'source>(root: Pelem, len_bars: Dur) -> Vec<Event> {
-    let mut events: Vec<Event> = vec![];
-    transform_r(root, len_bars, &mut events);
-    events
-}
-
-fn transform_r<'source>(root: Pelem, len: Dur, events: &mut Vec<Event>) {
-    match root {
-        Pelem::Note(note) => events.push(Event {
-            action: EventType::NoteEvent(note),
-            dur: len,
-        }),
-        Pelem::Rest => events.push(Event {
-            action: EventType::Rest,
-            dur: len,
-        }),
-        Pelem::Group(elems) => {
-            if elems.len() == 0 {
-                return;
-            }
-            let num_elems = elems.len();
-            let each_dur = len.div_int(num_elems as i64);
-            for elem in elems {
-                transform_r(elem, each_dur, events);
-            }
-        }
-    }
-}
-
-fn pat(def: &str) -> Result<Pattern, ParseError> {
-    let len_bars = Dur::new(1, 1);
-    Ok(Pattern {
-        channel: None,
-        events: get_events(def, len_bars),
-        length_bars: Some(len_bars),
-    })
-}
-
 fn get_events(def: &str, len_bars: Dur) -> Vec<Event> {
     let root_elem = get_root_elem(def);
     return transform(root_elem, len_bars);
@@ -93,7 +55,6 @@ fn get_elems_r(root: &mut Pelem, tokens: Vec<Token>) -> usize {
                     }
                     Token::GroupEnd => {
                         idx += 1;
-                        break;
                     }
                     Token::NoteExpr(note) => {
                         elems.push(Pelem::Note(*note));
@@ -109,12 +70,50 @@ fn get_elems_r(root: &mut Pelem, tokens: Vec<Token>) -> usize {
     }
 }
 
+fn transform<'source>(root: Pelem, len_bars: Dur) -> Vec<Event> {
+    let mut events: Vec<Event> = vec![];
+    transform_r(root, len_bars, &mut events);
+    events
+}
+
+fn transform_r<'source>(root: Pelem, len: Dur, events: &mut Vec<Event>) {
+    match root {
+        Pelem::Note(note) => events.push(Event {
+            action: EventType::NoteEvent(note),
+            dur: len,
+        }),
+        Pelem::Rest => events.push(Event {
+            action: EventType::Rest,
+            dur: len,
+        }),
+        Pelem::Group(elems) => {
+            if elems.len() == 0 {
+                return;
+            }
+            let num_elems = elems.len();
+            let each_dur = len.div_int(num_elems as i64);
+            for elem in elems {
+                transform_r(elem, each_dur, events);
+            }
+        }
+    }
+}
+
+fn pat(def: &str) -> Result<Pattern, ParseError> {
+    let len_bars = Dur::new(1, 1);
+    Ok(Pattern {
+        channel: None,
+        events: get_events(def, len_bars),
+        length_bars: Some(len_bars),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use crate::dur::{Dur, BAR};
     use crate::lex::DEFAULT_VELOCITY;
-    use crate::pattern_dsl::{get_root_elem, pat, Pelem};
     use crate::pattern::{Event, EventType, Note, Pattern};
+    use crate::pattern_dsl::{get_root_elem, pat, Pelem};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -128,6 +127,18 @@ mod tests {
             }),
         );
     }
+
+    // #[test]
+    // fn test_pattern_group_missing_right_delimiter() {
+    //     assert_eq!(
+    //         pat("["),
+    //         Ok(Pattern {
+    //             channel: None,
+    //             length_bars: Some(BAR),
+    //             events: vec![],
+    //         }),
+    //     );
+    // }
 
     #[test]
     fn test_pattern_single_note() {
@@ -178,7 +189,43 @@ mod tests {
     }
 
     #[test]
-    fn test_pattern_with_subpattern() {
+    fn test_pattern_with_subpattern_first() {
+        let actual = pat("[[D'g G4u] Cx]");
+        let expect = Pattern {
+            channel: None,
+            length_bars: Some(BAR),
+            events: vec![
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 63,
+                        velocity: 0.26,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 79,
+                        velocity: 0.78,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 60,
+                        velocity: 0.89,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 2),
+                },
+            ],
+        };
+        assert_eq!(actual, Ok(expect));
+    }
+
+    #[test]
+    fn test_pattern_with_subpattern_last() {
         let actual = pat("[Cx [D'g G4u]]");
         let expect = Pattern {
             channel: None,
