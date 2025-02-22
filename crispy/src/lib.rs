@@ -1,5 +1,6 @@
 mod controller;
 mod dur;
-mod mini_notation;
+mod lex;
+mod pattern_dsl;
 mod pattern;
 mod plugin;
