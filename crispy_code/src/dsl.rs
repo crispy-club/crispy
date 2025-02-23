@@ -78,9 +78,10 @@ impl Parser<ParsingPattern> {
                 Token::Tie => {
                     elems.push(Element::Tie);
                 }
-                Token::NoteRepeat(_) => {} // Safe to ignore
-                Token::NoteTie(_) => {}    // Safe to ignore
-                Token::RestTie(_) => {}    // Safe to ignore
+                Token::NoteRepeatGrouped(_) => {} // Safe to ignore
+                Token::NoteRepeat(_) => {}        // Safe to ignore
+                Token::NoteTie(_) => {}           // Safe to ignore
+                Token::RestTie(_) => {}           // Safe to ignore
             }
             idx += 1
         }
@@ -141,9 +142,10 @@ impl Parser<ParsingGroup> {
                 Token::Tie => {
                     elems.push(Element::Tie);
                 }
-                Token::NoteRepeat(_) => {} // Safe to ignore
-                Token::NoteTie(_) => {}    // Safe to ignore
-                Token::RestTie(_) => {}    // Safe to ignore
+                Token::NoteRepeatGrouped(_) => {} // Safe to ignore
+                Token::NoteRepeat(_) => {}        // Safe to ignore
+                Token::NoteTie(_) => {}           // Safe to ignore
+                Token::RestTie(_) => {}           // Safe to ignore
             }
             idx += 1
         }
@@ -209,6 +211,13 @@ fn desugar(tokens: Vec<Token>) -> Vec<Token> {
                 for _ in 0..repeats {
                     res.push(Token::NoteExpr(note));
                 }
+            }
+            Token::NoteRepeatGrouped((note, repeats)) => {
+                res.push(Token::GroupStart);
+                for _ in 0..repeats {
+                    res.push(Token::NoteExpr(note));
+                }
+                res.push(Token::GroupEnd);
             }
             any => res.push(any),
         }
@@ -562,6 +571,50 @@ mod tests {
                         dur: Dur::new(1, 2),
                     }),
                     dur: Dur::new(1, 4),
+                },
+            ],
+        };
+        assert_eq!(actual, Ok(expect));
+    }
+
+    #[test]
+    fn test_pattern_with_grouping_repeat() {
+        let actual = pat("[Cx D'g;2 G4u]");
+        let expect = Pattern {
+            channel: None,
+            length_bars: Some(BAR),
+            events: vec![
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 60,
+                        velocity: 0.89,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 3),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 63,
+                        velocity: 0.26,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 6),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 63,
+                        velocity: 0.26,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 6),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 79,
+                        velocity: 0.78,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 3),
                 },
             ],
         };
