@@ -28,19 +28,33 @@ fn get_velocity(c: char) -> f32 {
 }
 
 static NOTE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^([CDEFGAB])(')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?(@\d+)?$").unwrap()
+    Regex::new(r"^([CDEFGAB])(')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?(@\d+)?(:\d+)?$").unwrap()
 });
 
 fn parse_note_expr(def: &str) -> Option<Note> {
-    match parse_note_tie(def) {
+    match parse_note(def) {
         Some(tup) => Some(tup.0),
         None => None,
     }
 }
 
+fn parse_note_repeat(def: &str) -> Option<(Note, u32)> {
+    match parse_note(def) {
+        Some(tup) => Some((tup.0, tup.2)),
+        None => None,
+    }
+}
+
 fn parse_note_tie(def: &str) -> Option<(Note, u32)> {
+    match parse_note(def) {
+        Some(tup) => Some((tup.0, tup.1)),
+        None => None,
+    }
+}
+
+fn parse_note(def: &str) -> Option<(Note, u32, u32)> {
     let caps = NOTE_REGEX.captures(def).unwrap();
-    assert_eq!(caps.len(), 6);
+    assert_eq!(caps.len(), 7);
     let mut note_num = get_pitch_class(caps[1].chars().next().unwrap());
     if let Some(_sharp) = caps.get(2) {
         note_num += 1
@@ -61,6 +75,10 @@ fn parse_note_tie(def: &str) -> Option<(Note, u32)> {
     if let Some(matched) = caps.get(5) {
         ties = matched.as_str()[1..].parse().unwrap();
     }
+    let mut repeats_no_grouping: u32 = 1;
+    if let Some(matched) = caps.get(6) {
+        repeats_no_grouping = matched.as_str()[1..].parse().unwrap();
+    }
     Some((
         Note {
             note_num: note_num as u8,
@@ -70,6 +88,7 @@ fn parse_note_tie(def: &str) -> Option<(Note, u32)> {
             dur: Dur::new(1, 2),
         },
         ties,
+        repeats_no_grouping,
     ))
 }
 
@@ -85,6 +104,8 @@ pub enum Token {
     GroupStart,
     #[token("]")]
     GroupEnd,
+    #[regex(r"[CDEFGAB](')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?:(\d+)", |lex| parse_note_repeat(lex.slice()))]
+    NoteRepeat((Note, u32)),
     #[regex(r"[CDEFGAB](')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?@(\d+)", |lex| parse_note_tie(lex.slice()))]
     NoteTie((Note, u32)),
     #[regex(r"[CDEFGAB](')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?", |lex| parse_note_expr(lex.slice()))]
@@ -143,34 +164,34 @@ mod test {
     #[test]
     fn test_note_regex() {
         let caps = NOTE_REGEX.captures("C'").unwrap();
-        assert_eq!(caps.len(), 6);
+        assert_eq!(caps.len(), 7);
         assert_eq!(&caps[1], "C");
         assert_eq!(&caps[2], "'");
 
         let caps = NOTE_REGEX.captures("C3").unwrap();
-        assert_eq!(caps.len(), 6);
+        assert_eq!(caps.len(), 7);
         assert_eq!(&caps[1], "C");
         assert_eq!(&caps[3], "3");
 
         let caps = NOTE_REGEX.captures("Cx").unwrap();
-        assert_eq!(caps.len(), 6);
+        assert_eq!(caps.len(), 7);
         assert_eq!(&caps[1], "C");
         assert_eq!(&caps[4], "x");
 
         let caps = NOTE_REGEX.captures("C'3").unwrap();
-        assert_eq!(caps.len(), 6);
+        assert_eq!(caps.len(), 7);
         assert_eq!(&caps[1], "C");
         assert_eq!(&caps[2], "'");
         assert_eq!(&caps[3], "3");
 
         let caps = NOTE_REGEX.captures("C'x").unwrap();
-        assert_eq!(caps.len(), 6);
+        assert_eq!(caps.len(), 7);
         assert_eq!(&caps[1], "C");
         assert_eq!(&caps[2], "'");
         assert_eq!(&caps[4], "x");
 
         let caps = NOTE_REGEX.captures("C'3x").unwrap();
-        assert_eq!(caps.len(), 6);
+        assert_eq!(caps.len(), 7);
         assert_eq!(&caps[1], "C");
         assert_eq!(&caps[2], "'");
         assert_eq!(&caps[3], "3");

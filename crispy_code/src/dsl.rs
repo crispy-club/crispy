@@ -78,8 +78,9 @@ impl Parser<ParsingPattern> {
                 Token::Tie => {
                     elems.push(Element::Tie);
                 }
-                Token::NoteTie(_) => {} // Safe to ignore
-                Token::RestTie(_) => {} // Safe to ignore
+                Token::NoteRepeat(_) => {} // Safe to ignore
+                Token::NoteTie(_) => {}    // Safe to ignore
+                Token::RestTie(_) => {}    // Safe to ignore
             }
             idx += 1
         }
@@ -140,8 +141,9 @@ impl Parser<ParsingGroup> {
                 Token::Tie => {
                     elems.push(Element::Tie);
                 }
-                Token::NoteTie(_) => {} // Safe to ignore
-                Token::RestTie(_) => {} // Safe to ignore
+                Token::NoteRepeat(_) => {} // Safe to ignore
+                Token::NoteTie(_) => {}    // Safe to ignore
+                Token::RestTie(_) => {}    // Safe to ignore
             }
             idx += 1
         }
@@ -178,7 +180,7 @@ fn get_events(def: &str, len_bars: Dur) -> Result<Vec<Event>, ParseError> {
 fn get_root_elem(def: &str) -> Result<Element, ParseError> {
     let tokens: Vec<Token> = Token::lexer(def).map(|res| res.unwrap()).collect();
     let mut parser = Parser::new();
-    let parsed = parser.parse(preprocess(tokens))?;
+    let parsed = parser.parse(desugar(tokens))?;
     let elements = parsed.get_elements();
     if elements.len() == 1 && matches!(elements[0], Element::Group(_)) {
         return Ok(elements[0].clone());
@@ -186,7 +188,7 @@ fn get_root_elem(def: &str) -> Result<Element, ParseError> {
     Ok(Element::Group(elements))
 }
 
-fn preprocess(tokens: Vec<Token>) -> Vec<Token> {
+fn desugar(tokens: Vec<Token>) -> Vec<Token> {
     let len = tokens.len();
     let mut res = Vec::with_capacity(len);
     for tok in tokens {
@@ -201,6 +203,11 @@ fn preprocess(tokens: Vec<Token>) -> Vec<Token> {
             Token::RestTie(ties) => {
                 for _ in 0..ties {
                     res.push(Token::Rest);
+                }
+            }
+            Token::NoteRepeat((note, repeats)) => {
+                for _ in 0..repeats {
+                    res.push(Token::NoteExpr(note));
                 }
             }
             any => res.push(any),
@@ -495,6 +502,50 @@ mod tests {
                         dur: Dur::new(1, 2),
                     }),
                     dur: Dur::new(1, 2),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 63,
+                        velocity: 0.26,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 79,
+                        velocity: 0.78,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+            ],
+        };
+        assert_eq!(actual, Ok(expect));
+    }
+
+    #[test]
+    fn test_pattern_with_nongrouping_repeat() {
+        let actual = pat("[Cx D'g:2 G4u]");
+        let expect = Pattern {
+            channel: None,
+            length_bars: Some(BAR),
+            events: vec![
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 60,
+                        velocity: 0.89,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 63,
+                        velocity: 0.26,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
                 },
                 Event {
                     action: EventType::NoteEvent(Note {
