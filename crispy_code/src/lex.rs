@@ -27,12 +27,20 @@ fn get_velocity(c: char) -> f32 {
     return ((((ascii_code as f32) - 96.0) / 27.0) * 100.0).round() / 100.0;
 }
 
-static NOTE_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^([CDEFGAB])(')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?$").unwrap());
+static NOTE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^([CDEFGAB])(')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?(@\d+)?$").unwrap()
+});
 
 fn parse_note_expr(def: &str) -> Option<Note> {
+    match parse_note_tie(def) {
+        Some(tup) => Some(tup.0),
+        None => None,
+    }
+}
+
+fn parse_note_tie(def: &str) -> Option<(Note, u32)> {
     let caps = NOTE_REGEX.captures(def).unwrap();
-    assert_eq!(caps.len(), 5);
+    assert_eq!(caps.len(), 6);
     let mut note_num = get_pitch_class(caps[1].chars().next().unwrap());
     if let Some(_sharp) = caps.get(2) {
         note_num += 1
@@ -49,13 +57,25 @@ fn parse_note_expr(def: &str) -> Option<Note> {
         let vel_str = matched.as_str();
         velocity = get_velocity(vel_str.chars().next().unwrap());
     }
-    Some(Note {
-        note_num: note_num as u8,
-        velocity: velocity,
-        // Duration is specified as ratio relative to the containing event's duration.
-        // Event duration is really what determines the rhythm of the overall pattern.
-        dur: Dur::new(1, 2),
-    })
+    let mut ties: u32 = 1;
+    if let Some(matched) = caps.get(5) {
+        ties = matched.as_str()[1..].parse().unwrap();
+    }
+    Some((
+        Note {
+            note_num: note_num as u8,
+            velocity: velocity,
+            // Duration is specified as ratio relative to the containing event's duration.
+            // Event duration is really what determines the rhythm of the overall pattern.
+            dur: Dur::new(1, 2),
+        },
+        ties,
+    ))
+}
+
+fn parse_rest_tie(def: &str) -> Option<u32> {
+    let ties: u32 = def[2..].parse().unwrap();
+    Some(ties)
 }
 
 #[derive(Clone, Debug, Logos, PartialEq)]
@@ -65,16 +85,24 @@ pub enum Token {
     GroupStart,
     #[token("]")]
     GroupEnd,
+    #[regex(r"[CDEFGAB](')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?@(\d+)", |lex| parse_note_tie(lex.slice()))]
+    NoteTie((Note, u32)),
     #[regex(r"[CDEFGAB](')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?", |lex| parse_note_expr(lex.slice()))]
     NoteExpr(Note),
+    #[regex(r"\.@(\d+)", |lex| parse_rest_tie(lex.slice()))]
+    RestTie(u32),
     #[token(".")]
     Rest,
+    #[token("_")]
+    Tie,
 }
 
 #[cfg(test)]
 mod test {
     use crate::dur::Dur;
-    use crate::lex::{get_velocity, parse_note_expr, DEFAULT_VELOCITY, NOTE_REGEX};
+    use crate::lex::{
+        get_velocity, parse_note_expr, parse_note_tie, parse_rest_tie, DEFAULT_VELOCITY, NOTE_REGEX,
+    };
     use crate::pattern::Note;
 
     #[test]
@@ -115,34 +143,34 @@ mod test {
     #[test]
     fn test_note_regex() {
         let caps = NOTE_REGEX.captures("C'").unwrap();
-        assert_eq!(caps.len(), 5);
+        assert_eq!(caps.len(), 6);
         assert_eq!(&caps[1], "C");
         assert_eq!(&caps[2], "'");
 
         let caps = NOTE_REGEX.captures("C3").unwrap();
-        assert_eq!(caps.len(), 5);
+        assert_eq!(caps.len(), 6);
         assert_eq!(&caps[1], "C");
         assert_eq!(&caps[3], "3");
 
         let caps = NOTE_REGEX.captures("Cx").unwrap();
-        assert_eq!(caps.len(), 5);
+        assert_eq!(caps.len(), 6);
         assert_eq!(&caps[1], "C");
         assert_eq!(&caps[4], "x");
 
         let caps = NOTE_REGEX.captures("C'3").unwrap();
-        assert_eq!(caps.len(), 5);
+        assert_eq!(caps.len(), 6);
         assert_eq!(&caps[1], "C");
         assert_eq!(&caps[2], "'");
         assert_eq!(&caps[3], "3");
 
         let caps = NOTE_REGEX.captures("C'x").unwrap();
-        assert_eq!(caps.len(), 5);
+        assert_eq!(caps.len(), 6);
         assert_eq!(&caps[1], "C");
         assert_eq!(&caps[2], "'");
         assert_eq!(&caps[4], "x");
 
         let caps = NOTE_REGEX.captures("C'3x").unwrap();
-        assert_eq!(caps.len(), 5);
+        assert_eq!(caps.len(), 6);
         assert_eq!(&caps[1], "C");
         assert_eq!(&caps[2], "'");
         assert_eq!(&caps[3], "3");
@@ -190,5 +218,66 @@ mod test {
                 dur: Dur::new(1, 2),
             })
         );
+    }
+
+    #[test]
+    fn test_parse_note_tie() {
+        let note = parse_note_tie("C@3");
+        assert_eq!(
+            note,
+            Some((
+                Note {
+                    note_num: 60,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                },
+                3
+            ))
+        );
+
+        let note = parse_note_tie("C'@3");
+        assert_eq!(
+            note,
+            Some((
+                Note {
+                    note_num: 61,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                },
+                3
+            ))
+        );
+
+        let note = parse_note_tie("E1@3");
+        assert_eq!(
+            note,
+            Some((
+                Note {
+                    note_num: 40,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                },
+                3
+            ))
+        );
+
+        let note = parse_note_tie("D'2@3");
+        assert_eq!(
+            note,
+            Some((
+                Note {
+                    note_num: 51,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                },
+                3
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_rest_tie() {
+        let tok = parse_rest_tie(".@3");
+        assert_eq!(tok, Some(3));
     }
 }
