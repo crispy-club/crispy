@@ -4,70 +4,168 @@ use crate::pattern::{Event, EventType, Note, Pattern};
 use logos::Logos;
 
 #[derive(Debug, Clone, PartialEq)]
-struct ParseError;
+enum ParseError {
+    HalfOpenGroup,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 enum Pelem {
-    Rest,
-    Note(Note),
     Group(Vec<Pelem>),
+    Note(Note),
+    Rest,
 }
 
-fn get_events(def: &str, len_bars: Dur) -> Vec<Event> {
-    let root_elem = get_root_elem(def);
-    return transform(root_elem, len_bars);
+#[allow(dead_code)]
+struct ParsingStart;
+
+struct ParsingPattern;
+
+struct ParsingEnd {
+    elems: Vec<Pelem>,
 }
 
-fn get_root_elem(def: &str) -> Pelem {
-    let tokens: Vec<Token> = Token::lexer(def).map(|res| res.unwrap()).collect();
-    let mut root = Pelem::Group(vec![]);
-    get_elems_r(&mut root, tokens);
-    root
+struct Parser<State> {
+    state: State,
 }
 
-fn get_elems_r(root: &mut Pelem, tokens: Vec<Token>) -> usize {
-    // Handle the empty string.
-    if tokens.len() == 0 {
-        return 0;
-    }
-    // `[C]` is the same thing as `C`
-    if tokens.len() >= 2
-        && tokens[0] == Token::GroupStart
-        && tokens[tokens.len() - 1] == Token::GroupEnd
-    {
-        return get_elems_r(root, (&tokens[1..tokens.len() - 1]).to_vec());
-    }
-    match root {
-        Pelem::Rest => 0,
-        Pelem::Note(_) => 0,
-        Pelem::Group(ref mut elems) => {
-            let mut idx = 0;
-            while idx < tokens.len() {
-                let tok = &tokens[idx];
-
-                match tok {
-                    Token::GroupStart => {
-                        let mut sub_group = Pelem::Group(vec![]);
-                        let jump = get_elems_r(&mut sub_group, (&tokens[(idx + 1)..]).to_vec());
-                        elems.push(sub_group);
-                        idx += jump;
-                        continue;
-                    }
-                    Token::GroupEnd => {
-                        idx += 1;
-                    }
-                    Token::NoteExpr(note) => {
-                        elems.push(Pelem::Note(*note));
-                    }
-                    Token::Rest => {
-                        elems.push(Pelem::Rest);
-                    }
-                }
-                idx += 1;
-            }
-            idx
+impl Parser<ParsingStart> {
+    fn new() -> Parser<ParsingPattern> {
+        Parser {
+            state: ParsingPattern,
         }
     }
+
+    fn new_group() -> Parser<ParsingGroup> {
+        Parser {
+            state: ParsingGroup,
+        }
+    }
+}
+
+impl Parser<ParsingPattern> {
+    fn parse(&mut self, tokens: Vec<Token>) -> Parser<ParsingEnd> {
+        let mut elems: Vec<Pelem> = vec![];
+
+        if tokens.len() == 0 {
+            return Parser {
+                state: ParsingEnd { elems: elems },
+            };
+        }
+        let mut idx = 0;
+
+        while idx < tokens.len() {
+            match tokens[idx] {
+                Token::GroupStart => {
+                    let group = Parser::new_group();
+                    let parsed = group.parse((&tokens[(idx + 1)..]).to_vec());
+                    let group_elements = parsed.get_elements();
+                    let tokens_consumed = parsed.get_tokens_consumed();
+                    elems.extend(group_elements);
+                    idx += tokens_consumed;
+                    continue;
+                }
+                Token::GroupEnd => {
+                    panic!("] without a matching [");
+                }
+                Token::NoteExpr(note) => {
+                    elems.push(Pelem::Note(note));
+                }
+                Token::Rest => {
+                    elems.push(Pelem::Rest);
+                }
+            }
+            idx += 1
+        }
+        Parser {
+            state: ParsingEnd { elems: elems },
+        }
+    }
+}
+
+impl Parser<ParsingEnd> {
+    fn get_elements(&self) -> Vec<Pelem> {
+        self.state.elems.clone()
+    }
+}
+
+struct ParsingGroup;
+
+struct GroupEnd {
+    elems: Vec<Pelem>,
+    tokens_consumed: usize,
+}
+
+impl Parser<ParsingGroup> {
+    fn parse(&self, tokens: Vec<Token>) -> Parser<GroupEnd> {
+        let mut elems: Vec<Pelem> = vec![];
+
+        if tokens.len() == 0 {
+            return Parser {
+                state: GroupEnd {
+                    elems: elems,
+                    tokens_consumed: 0,
+                },
+            };
+        }
+        let mut idx = 0;
+
+        while idx < tokens.len() {
+            match tokens[idx] {
+                Token::GroupStart => {
+                    let group = Parser::new_group();
+                    let parsed = group.parse((&tokens[(idx + 1)..]).to_vec());
+                    let group_elements = parsed.get_elements();
+                    let tokens_consumed = parsed.get_tokens_consumed();
+                    elems.extend(group_elements);
+                    idx += tokens_consumed;
+                    continue;
+                }
+                Token::GroupEnd => {
+                    return Parser {
+                        state: GroupEnd {
+                            elems: elems,
+                            tokens_consumed: idx + 1,
+                        },
+                    };
+                }
+                Token::NoteExpr(note) => {
+                    elems.push(Pelem::Note(note));
+                }
+                Token::Rest => {
+                    elems.push(Pelem::Rest);
+                }
+            }
+            idx += 1
+        }
+        Parser {
+            state: GroupEnd {
+                elems: elems,
+                tokens_consumed: idx,
+            },
+        }
+    }
+}
+
+impl Parser<GroupEnd> {
+    fn get_elements(&self) -> Vec<Pelem> {
+        self.state.elems.clone()
+    }
+
+    fn get_tokens_consumed(&self) -> usize {
+        self.state.tokens_consumed
+    }
+}
+
+fn get_events(def: &str, len_bars: Dur) -> Result<Vec<Event>, ParseError> {
+    let root_elem = get_root_elem(def)?;
+    Ok(transform(root_elem, len_bars))
+}
+
+fn get_root_elem(def: &str) -> Result<Pelem, ParseError> {
+    let tokens: Vec<Token> = Token::lexer(def).map(|res| res.unwrap()).collect();
+    let mut parser = Parser::new();
+    let parsed = parser.parse(tokens);
+    Ok(Pelem::Group(parsed.get_elements()))
 }
 
 fn transform<'source>(root: Pelem, len_bars: Dur) -> Vec<Event> {
@@ -101,9 +199,10 @@ fn transform_r<'source>(root: Pelem, len: Dur, events: &mut Vec<Event>) {
 
 fn pat(def: &str) -> Result<Pattern, ParseError> {
     let len_bars = Dur::new(1, 1);
+    let events = get_events(def, len_bars)?;
     Ok(Pattern {
         channel: None,
-        events: get_events(def, len_bars),
+        events: events,
         length_bars: Some(len_bars),
     })
 }
@@ -113,7 +212,7 @@ mod tests {
     use crate::dur::{Dur, BAR};
     use crate::lex::DEFAULT_VELOCITY;
     use crate::pattern::{Event, EventType, Note, Pattern};
-    use crate::pattern_dsl::{get_root_elem, pat, Pelem};
+    use crate::pattern_dsl::{get_root_elem, pat, ParseError, Pelem};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -128,17 +227,15 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn test_pattern_group_missing_right_delimiter() {
-    //     assert_eq!(
-    //         pat("["),
-    //         Ok(Pattern {
-    //             channel: None,
-    //             length_bars: Some(BAR),
-    //             events: vec![],
-    //         }),
-    //     );
-    // }
+    #[test]
+    fn test_pattern_group_missing_right_delimiter() {
+        assert_eq!(pat("["), Err(ParseError::HalfOpenGroup));
+    }
+
+    #[test]
+    fn test_pattern_group_missing_left_delimiter() {
+        assert_eq!(pat("]"), Err(ParseError::HalfOpenGroup));
+    }
 
     #[test]
     fn test_pattern_single_note() {
@@ -265,11 +362,11 @@ mod tests {
         let elem = get_root_elem("[C]");
         assert_eq!(
             elem,
-            Pelem::Group(vec![Pelem::Note(Note {
+            Ok(Pelem::Group(vec![Pelem::Note(Note {
                 note_num: 60,
                 velocity: DEFAULT_VELOCITY,
                 dur: Dur::new(1, 2),
-            })])
+            })]))
         );
     }
 
@@ -278,7 +375,7 @@ mod tests {
         let elem = get_root_elem("C [D E]");
         assert_eq!(
             elem,
-            Pelem::Group(vec![
+            Ok(Pelem::Group(vec![
                 Pelem::Note(Note {
                     note_num: 60,
                     velocity: DEFAULT_VELOCITY,
@@ -296,7 +393,7 @@ mod tests {
                         dur: Dur::new(1, 2),
                     }),
                 ]),
-            ])
+            ]))
         );
     }
 }
