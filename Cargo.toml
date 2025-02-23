@@ -1,5 +1,5 @@
 [package]
-name = "live"
+name = "crispy"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.80"
@@ -13,7 +13,7 @@ repository = "https://github.com/briansorahan/crispy"
 [workspace]
 members = [
   "xtask",
-  "crispy",
+  "crispy_code",
 ]
 
 [dependencies]
