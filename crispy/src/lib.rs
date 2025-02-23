@@ -1,6 +1,6 @@
 mod controller;
 mod dur;
 mod lex;
-mod pattern_dsl;
+mod dsl;
 mod pattern;
 mod plugin;
