@@ -370,6 +370,28 @@ mod tests {
                 ],
             }),
         );
+
+        assert_eq!(
+            pat("Cx ."),
+            Ok(Pattern {
+                channel: None,
+                length_bars: Some(BAR),
+                events: vec![
+                    Event {
+                        action: EventType::NoteEvent(Note {
+                            note_num: 60,
+                            velocity: 0.89,
+                            dur: Dur::new(1, 2),
+                        }),
+                        dur: Dur::new(1, 2),
+                    },
+                    Event {
+                        action: EventType::Rest,
+                        dur: Dur::new(1, 2),
+                    },
+                ],
+            }),
+        );
     }
 
     #[test]
