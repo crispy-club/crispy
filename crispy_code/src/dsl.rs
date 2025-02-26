@@ -67,14 +67,14 @@ fn desugar(tokens: Vec<Token>) -> Vec<Token> {
 
 fn transform<'source>(root: Element, len_bars: Dur) -> Vec<Event> {
     let mut events: Vec<Event> = vec![];
-    transform_r(root, len_bars, &mut events);
+    transform_r(&root, len_bars, &mut events);
     events
 }
 
-fn transform_r<'source>(root: Element, len: Dur, events: &mut Vec<Event>) {
+fn transform_r<'source>(root: &Element, len: Dur, events: &mut Vec<Event>) {
     match root {
         Element::Note(note) => events.push(Event {
-            action: EventType::NoteEvent(note),
+            action: EventType::NoteEvent(*note),
             dur: len,
         }),
         Element::Rest => events.push(Event {
@@ -94,7 +94,15 @@ fn transform_r<'source>(root: Element, len: Dur, events: &mut Vec<Event>) {
                 transform_r(elem, each_dur, events);
             }
         }
-        Element::Alternation(_) => {}
+        Element::Alternation((anchor_element, alt_elements)) => {
+            let alt_len = alt_elements.len();
+            let each_dur = len.div_int((alt_len * 2) as i64);
+            for elem in alt_elements {
+                // Add elem then anchor_element
+                transform_r(anchor_element, each_dur, events);
+                transform_r(elem, each_dur, events);
+            }
+        }
     }
 }
 
@@ -117,6 +125,46 @@ mod tests {
     use crate::lex::DEFAULT_VELOCITY;
     use crate::pattern::{Event, EventType, Note, Pattern};
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_get_root_elem() {
+        let elem = get_root_elem("[C]");
+        assert_eq!(
+            elem,
+            Ok(Element::Group(vec![Element::Note(Note {
+                note_num: 60,
+                velocity: DEFAULT_VELOCITY,
+                dur: Dur::new(1, 2),
+            })]))
+        );
+    }
+
+    #[test]
+    fn test_get_root_elem_subgroup() {
+        let elem = get_root_elem("C [D E]");
+        assert_eq!(
+            elem,
+            Ok(Element::Group(vec![
+                Element::Note(Note {
+                    note_num: 60,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                }),
+                Element::Group(vec![
+                    Element::Note(Note {
+                        note_num: 62,
+                        velocity: DEFAULT_VELOCITY,
+                        dur: Dur::new(1, 2),
+                    }),
+                    Element::Note(Note {
+                        note_num: 64,
+                        velocity: DEFAULT_VELOCITY,
+                        dur: Dur::new(1, 2),
+                    }),
+                ]),
+            ]))
+        );
+    }
 
     #[test]
     fn test_pattern_empty() {
@@ -485,42 +533,54 @@ mod tests {
     }
 
     #[test]
-    fn test_get_root_elem() {
-        let elem = get_root_elem("[C]");
-        assert_eq!(
-            elem,
-            Ok(Element::Group(vec![Element::Note(Note {
-                note_num: 60,
-                velocity: DEFAULT_VELOCITY,
-                dur: Dur::new(1, 2),
-            })]))
-        );
+    fn test_pattern_with_alternation() {
+        let actual = pat("[Cx <D'g G4u>]");
+        let expect = Pattern {
+            channel: None,
+            length_bars: Some(BAR),
+            events: vec![
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 60,
+                        velocity: 0.89,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 63,
+                        velocity: 0.26,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 60,
+                        velocity: 0.89,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 79,
+                        velocity: 0.78,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+            ],
+        };
+        assert_eq!(actual, Ok(expect));
     }
 
     #[test]
-    fn test_get_root_elem_subgroup() {
-        let elem = get_root_elem("C [D E]");
-        assert_eq!(
-            elem,
-            Ok(Element::Group(vec![
-                Element::Note(Note {
-                    note_num: 60,
-                    velocity: DEFAULT_VELOCITY,
-                    dur: Dur::new(1, 2),
-                }),
-                Element::Group(vec![
-                    Element::Note(Note {
-                        note_num: 62,
-                        velocity: DEFAULT_VELOCITY,
-                        dur: Dur::new(1, 2),
-                    }),
-                    Element::Note(Note {
-                        note_num: 64,
-                        velocity: DEFAULT_VELOCITY,
-                        dur: Dur::new(1, 2),
-                    }),
-                ]),
-            ]))
-        );
+    fn test_pattern_missing_alternation_delimiter() {
+        let actual = pat("Cx <D'g G4u");
+        assert_eq!(actual, Err(ParseError::MissingAlternationDelimiter));
+        let actual = pat("Cx D'g G4u>");
+        assert_eq!(actual, Err(ParseError::MissingAlternationDelimiter));
     }
 }

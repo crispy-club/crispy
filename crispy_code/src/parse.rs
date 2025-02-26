@@ -72,10 +72,8 @@ impl Parser<ParsingPattern> {
                     let parsed = alt.parse((&tokens[(idx + 1)..]).to_vec())?;
                     let alt_elements = parsed.get_elements();
                     let tokens_consumed = parsed.get_tokens_consumed();
-                    elems.push(Element::Alternation((
-                        Box::new(elems[num_elems - 1].clone()),
-                        alt_elements,
-                    )));
+                    let last_elem = elems.pop().unwrap().clone();
+                    elems.push(Element::Alternation((Box::new(last_elem), alt_elements)));
                     idx += tokens_consumed + 1;
                     continue;
                 }
@@ -152,10 +150,8 @@ impl Parser<ParsingGroup> {
                     let parsed = alt.parse((&tokens[(idx + 1)..]).to_vec())?;
                     let alt_elements = parsed.get_elements();
                     let tokens_consumed = parsed.get_tokens_consumed();
-                    elems.push(Element::Alternation((
-                        Box::new(elems[num_elems - 1].clone()),
-                        alt_elements,
-                    )));
+                    let last_elem = elems.pop().unwrap().clone();
+                    elems.push(Element::Alternation((Box::new(last_elem), alt_elements)));
                     idx += tokens_consumed + 1;
                     continue;
                 }
