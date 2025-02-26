@@ -103,10 +103,7 @@ impl Parser<ParsingPattern> {
                 Token::Tie => {
                     elems.push(Element::Tie);
                 }
-                Token::NoteRepeatGrouped(_) => {} // Safe to ignore
-                Token::NoteRepeat(_) => {}        // Safe to ignore
-                Token::NoteTie(_) => {}           // Safe to ignore
-                Token::RestTie(_) => {}           // Safe to ignore
+                _ => {} // Everything else is desugared away
             }
             idx += 1
         }
@@ -185,10 +182,7 @@ impl Parser<ParsingGroup> {
                 Token::Tie => {
                     elems.push(Element::Tie);
                 }
-                Token::NoteRepeatGrouped(_) => {} // Safe to ignore
-                Token::NoteRepeat(_) => {}        // Safe to ignore
-                Token::NoteTie(_) => {}           // Safe to ignore
-                Token::RestTie(_) => {}           // Safe to ignore
+                _ => {} // Everything else is desugared away
             }
             idx += 1
         }
@@ -272,10 +266,7 @@ impl Parser<ParsingAlternation> {
                 Token::Tie => {
                     elems.push(Element::Tie);
                 }
-                Token::NoteRepeatGrouped(_) => {} // Safe to ignore
-                Token::NoteRepeat(_) => {}        // Safe to ignore
-                Token::NoteTie(_) => {}           // Safe to ignore
-                Token::RestTie(_) => {}           // Safe to ignore
+                _ => {} // Everything else is desugared away
             }
             idx += 1
         }
