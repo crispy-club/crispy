@@ -583,4 +583,10 @@ mod tests {
         let actual = pat("Cx D'g G4u>");
         assert_eq!(actual, Err(ParseError::MissingAlternationDelimiter));
     }
+
+    #[test]
+    fn test_pattern_missing_alternation_anchor() {
+        let actual = pat("<D'g G4u>");
+        assert_eq!(actual, Err(ParseError::MissingAlternationAnchor));
+    }
 }
