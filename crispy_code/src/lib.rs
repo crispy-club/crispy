@@ -1,7 +1,7 @@
 mod controller;
-mod dsl;
-mod dur;
-mod lex;
-mod parse;
-mod pattern;
+pub mod dsl;
+pub mod dur;
+pub mod lex;
+pub mod parse;
+pub mod pattern;
 mod plugin;

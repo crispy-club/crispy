@@ -4,7 +4,9 @@ use crate::parse::{Element, ParseError, Parser};
 use crate::pattern::{Event, EventType, Pattern};
 use logos::Logos;
 
-fn pat(def: &str) -> Result<Pattern, ParseError> {
+// Covered by integration tests
+#[allow(dead_code)]
+pub fn pat(def: &str) -> Result<Pattern, ParseError> {
     let len_bars = Dur::new(1, 1);
     let events = get_events(def, len_bars)?;
     Ok(Pattern {
@@ -16,6 +18,7 @@ fn pat(def: &str) -> Result<Pattern, ParseError> {
 
 fn get_events(def: &str, len_bars: Dur) -> Result<Vec<Event>, ParseError> {
     let root_elem = get_root_elem(def)?;
+    println!("root_elem {:?}", root_elem);
     Ok(transform(root_elem, len_bars))
 }
 
@@ -95,15 +98,32 @@ fn transform_r<'source>(root: &Element, len: Dur, events: &mut Vec<Event>) {
             }
         }
         Element::Alternation((anchor_element, alt_elements)) => {
-            let alt_len = alt_elements.len();
-            let each_dur = len.div_int((alt_len * 2) as i64);
-            for elem in alt_elements {
-                // Add elem then anchor_element
-                transform_r(anchor_element, each_dur, events);
-                transform_r(elem, each_dur, events);
+            // let alt_len = alt_elements.len();
+            // let each_dur = len.div_int(2);
+            transform_r(
+                &Element::Group(expand_alt(anchor_element, alt_elements.to_vec())),
+                len,
+                events,
+            );
+        }
+    }
+}
+
+fn expand_alt<'source>(anchor: &Element, elements: Vec<Element>) -> Vec<Element> {
+    let mut expanded_elements: Vec<Element> = vec![];
+    for elem in elements {
+        match elem {
+            Element::Alternation((alt_anchor, alt_elems)) => {
+                let sub_elems = expand_alt(&alt_anchor, alt_elems.to_vec());
+                expanded_elements.extend(expand_alt(anchor, sub_elems));
+            }
+            _ => {
+                expanded_elements.push(anchor.clone());
+                expanded_elements.push(elem);
             }
         }
     }
+    expanded_elements
 }
 
 fn handle_tie<'source>(len: Dur, events: &mut Vec<Event>) {
@@ -120,10 +140,10 @@ fn handle_tie<'source>(len: Dur, events: &mut Vec<Event>) {
 
 #[cfg(test)]
 mod tests {
-    use crate::dsl::{get_root_elem, pat, Element, ParseError};
-    use crate::dur::{Dur, BAR};
+    use crate::dsl::{expand_alt, get_root_elem, Element};
+    use crate::dur::Dur;
     use crate::lex::DEFAULT_VELOCITY;
-    use crate::pattern::{Event, EventType, Note, Pattern};
+    use crate::pattern::Note;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -167,426 +187,125 @@ mod tests {
     }
 
     #[test]
-    fn test_pattern_empty() {
-        assert_eq!(
-            pat("[]"),
-            Ok(Pattern {
-                channel: None,
-                length_bars: Some(BAR),
-                events: vec![],
+    fn test_expand_alt() {
+        let actual = expand_alt(
+            &Element::Note(Note {
+                note_num: 60,
+                velocity: DEFAULT_VELOCITY,
+                dur: Dur::new(1, 2),
             }),
-        );
-    }
-
-    #[test]
-    fn test_pattern_missing_group_delimiter() {
-        assert_eq!(pat("["), Err(ParseError::MissingGroupDelimiter));
-        assert_eq!(pat("]"), Err(ParseError::MissingGroupDelimiter));
-        assert_eq!(pat("] C3"), Err(ParseError::MissingGroupDelimiter));
-        assert_eq!(pat("C3 ]"), Err(ParseError::MissingGroupDelimiter));
-        assert_eq!(pat("[ C3"), Err(ParseError::MissingGroupDelimiter));
-        assert_eq!(pat("C3 ["), Err(ParseError::MissingGroupDelimiter));
-    }
-
-    #[test]
-    fn test_pattern_single_note() {
-        assert_eq!(
-            pat("[Cx]"),
-            Ok(Pattern {
-                channel: None,
-                length_bars: Some(BAR),
-                events: vec![Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 60,
-                        velocity: 0.89,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 1),
-                },],
-            }),
-        );
-    }
-
-    #[test]
-    fn test_pattern_two_notes() {
-        assert_eq!(
-            pat("[Cx D'g]"),
-            Ok(Pattern {
-                channel: None,
-                length_bars: Some(BAR),
-                events: vec![
-                    Event {
-                        action: EventType::NoteEvent(Note {
-                            note_num: 60,
-                            velocity: 0.89,
-                            dur: Dur::new(1, 2),
-                        }),
-                        dur: Dur::new(1, 2),
-                    },
-                    Event {
-                        action: EventType::NoteEvent(Note {
-                            note_num: 63,
-                            velocity: 0.26,
-                            dur: Dur::new(1, 2),
-                        }),
-                        dur: Dur::new(1, 2),
-                    },
-                ],
-            }),
-        );
-    }
-
-    #[test]
-    fn test_pattern_single_note_plus_rest() {
-        assert_eq!(
-            pat("[Cx .]"),
-            Ok(Pattern {
-                channel: None,
-                length_bars: Some(BAR),
-                events: vec![
-                    Event {
-                        action: EventType::NoteEvent(Note {
-                            note_num: 60,
-                            velocity: 0.89,
-                            dur: Dur::new(1, 2),
-                        }),
-                        dur: Dur::new(1, 2),
-                    },
-                    Event {
-                        action: EventType::Rest,
-                        dur: Dur::new(1, 2),
-                    },
-                ],
-            }),
-        );
-
-        assert_eq!(
-            pat("Cx ."),
-            Ok(Pattern {
-                channel: None,
-                length_bars: Some(BAR),
-                events: vec![
-                    Event {
-                        action: EventType::NoteEvent(Note {
-                            note_num: 60,
-                            velocity: 0.89,
-                            dur: Dur::new(1, 2),
-                        }),
-                        dur: Dur::new(1, 2),
-                    },
-                    Event {
-                        action: EventType::Rest,
-                        dur: Dur::new(1, 2),
-                    },
-                ],
-            }),
-        );
-    }
-
-    #[test]
-    fn test_pattern_with_ties() {
-        assert_eq!(
-            pat("[Cx Gp _ _]"),
-            Ok(Pattern {
-                channel: None,
-                length_bars: Some(BAR),
-                events: vec![
-                    Event {
-                        action: EventType::NoteEvent(Note {
-                            note_num: 60,
-                            velocity: 0.89,
-                            dur: Dur::new(1, 2),
-                        }),
-                        dur: Dur::new(1, 4),
-                    },
-                    Event {
-                        action: EventType::NoteEvent(Note {
-                            note_num: 67,
-                            velocity: 0.59,
-                            dur: Dur::new(1, 2),
-                        }),
-                        dur: Dur::new(3, 4),
-                    },
-                ],
-            }),
-        );
-
-        assert_eq!(
-            pat("[Cx Gp@3]"),
-            Ok(Pattern {
-                channel: None,
-                length_bars: Some(BAR),
-                events: vec![
-                    Event {
-                        action: EventType::NoteEvent(Note {
-                            note_num: 60,
-                            velocity: 0.89,
-                            dur: Dur::new(1, 2),
-                        }),
-                        dur: Dur::new(1, 4),
-                    },
-                    Event {
-                        action: EventType::NoteEvent(Note {
-                            note_num: 67,
-                            velocity: 0.59,
-                            dur: Dur::new(1, 2),
-                        }),
-                        dur: Dur::new(3, 4),
-                    },
-                ],
-            }),
-        );
-
-        assert_eq!(
-            pat("[Cx .@2 Eo]"),
-            Ok(Pattern {
-                channel: None,
-                length_bars: Some(BAR),
-                events: vec![
-                    Event {
-                        action: EventType::NoteEvent(Note {
-                            note_num: 60,
-                            velocity: 0.89,
-                            dur: Dur::new(1, 2),
-                        }),
-                        dur: Dur::new(1, 4),
-                    },
-                    Event {
-                        action: EventType::Rest,
-                        dur: Dur::new(1, 4),
-                    },
-                    Event {
-                        action: EventType::Rest,
-                        dur: Dur::new(1, 4),
-                    },
-                    Event {
-                        action: EventType::NoteEvent(Note {
-                            note_num: 64,
-                            velocity: 0.56,
-                            dur: Dur::new(1, 2),
-                        }),
-                        dur: Dur::new(1, 4),
-                    },
-                ],
-            }),
-        );
-    }
-
-    #[test]
-    fn test_pattern_with_subpattern_first() {
-        let actual = pat("[[D'g G4u] Cx]");
-        let expect = Pattern {
-            channel: None,
-            length_bars: Some(BAR),
-            events: vec![
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 63,
-                        velocity: 0.26,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 4),
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 79,
-                        velocity: 0.78,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 4),
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 60,
-                        velocity: 0.89,
-                        dur: Dur::new(1, 2),
-                    }),
+            vec![
+                Element::Note(Note {
+                    note_num: 61,
+                    velocity: DEFAULT_VELOCITY,
                     dur: Dur::new(1, 2),
-                },
-            ],
-        };
-        assert_eq!(actual, Ok(expect));
-    }
-
-    #[test]
-    fn test_pattern_with_subpattern_last() {
-        let actual = pat("[Cx [D'g G4u]]");
-        let expect = Pattern {
-            channel: None,
-            length_bars: Some(BAR),
-            events: vec![
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 60,
-                        velocity: 0.89,
-                        dur: Dur::new(1, 2),
-                    }),
+                }),
+                Element::Note(Note {
+                    note_num: 62,
+                    velocity: DEFAULT_VELOCITY,
                     dur: Dur::new(1, 2),
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 63,
-                        velocity: 0.26,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 4),
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 79,
-                        velocity: 0.78,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 4),
-                },
+                }),
             ],
-        };
-        assert_eq!(actual, Ok(expect));
+        );
+        assert_eq!(
+            actual,
+            vec![
+                Element::Note(Note {
+                    note_num: 60,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                }),
+                Element::Note(Note {
+                    note_num: 61,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                }),
+                Element::Note(Note {
+                    note_num: 60,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                }),
+                Element::Note(Note {
+                    note_num: 62,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                }),
+            ]
+        );
     }
 
     #[test]
-    fn test_pattern_with_nongrouping_repeat() {
-        let actual = pat("[Cx D'g:2 G4u]");
-        let expect = Pattern {
-            channel: None,
-            length_bars: Some(BAR),
-            events: vec![
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 60,
-                        velocity: 0.89,
+    fn test_expand_alt_nested() {
+        let actual = expand_alt(
+            &Element::Note(Note {
+                note_num: 59,
+                velocity: DEFAULT_VELOCITY,
+                dur: Dur::new(1, 2),
+            }),
+            vec![Element::Alternation((
+                Box::new(Element::Note(Note {
+                    note_num: 60,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                })),
+                vec![
+                    Element::Note(Note {
+                        note_num: 61,
+                        velocity: DEFAULT_VELOCITY,
                         dur: Dur::new(1, 2),
                     }),
-                    dur: Dur::new(1, 4),
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 63,
-                        velocity: 0.26,
+                    Element::Note(Note {
+                        note_num: 62,
+                        velocity: DEFAULT_VELOCITY,
                         dur: Dur::new(1, 2),
                     }),
-                    dur: Dur::new(1, 4),
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 63,
-                        velocity: 0.26,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 4),
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 79,
-                        velocity: 0.78,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 4),
-                },
-            ],
-        };
-        assert_eq!(actual, Ok(expect));
-    }
-
-    #[test]
-    fn test_pattern_with_grouping_repeat() {
-        let actual = pat("[Cx D'g;2 G4u]");
-        let expect = Pattern {
-            channel: None,
-            length_bars: Some(BAR),
-            events: vec![
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 60,
-                        velocity: 0.89,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 3),
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 63,
-                        velocity: 0.26,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 6),
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 63,
-                        velocity: 0.26,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 6),
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 79,
-                        velocity: 0.78,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 3),
-                },
-            ],
-        };
-        assert_eq!(actual, Ok(expect));
-    }
-
-    #[test]
-    fn test_pattern_with_alternation() {
-        let actual = pat("[Cx <D'g G4u>]");
-        let expect = Pattern {
-            channel: None,
-            length_bars: Some(BAR),
-            events: vec![
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 60,
-                        velocity: 0.89,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 4),
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 63,
-                        velocity: 0.26,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 4),
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 60,
-                        velocity: 0.89,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 4),
-                },
-                Event {
-                    action: EventType::NoteEvent(Note {
-                        note_num: 79,
-                        velocity: 0.78,
-                        dur: Dur::new(1, 2),
-                    }),
-                    dur: Dur::new(1, 4),
-                },
-            ],
-        };
-        assert_eq!(actual, Ok(expect));
-    }
-
-    #[test]
-    fn test_pattern_missing_alternation_delimiter() {
-        let actual = pat("Cx <D'g G4u");
-        assert_eq!(actual, Err(ParseError::MissingAlternationDelimiter));
-        let actual = pat("Cx D'g G4u>");
-        assert_eq!(actual, Err(ParseError::MissingAlternationDelimiter));
-    }
-
-    #[test]
-    fn test_pattern_missing_alternation_anchor() {
-        let actual = pat("<D'g G4u>");
-        assert_eq!(actual, Err(ParseError::MissingAlternationAnchor));
+                ],
+            ))],
+        );
+        assert_eq!(
+            actual,
+            vec![
+                Element::Note(Note {
+                    note_num: 59,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                }),
+                Element::Note(Note {
+                    note_num: 60,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                }),
+                Element::Note(Note {
+                    note_num: 59,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                }),
+                Element::Note(Note {
+                    note_num: 61,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                }),
+                Element::Note(Note {
+                    note_num: 59,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                }),
+                Element::Note(Note {
+                    note_num: 60,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                }),
+                Element::Note(Note {
+                    note_num: 59,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                }),
+                Element::Note(Note {
+                    note_num: 62,
+                    velocity: DEFAULT_VELOCITY,
+                    dur: Dur::new(1, 2),
+                }),
+            ]
+        );
     }
 }
