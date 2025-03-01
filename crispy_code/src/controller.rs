@@ -62,7 +62,8 @@ pub async fn stop_pattern(
 #[cfg(test)]
 mod tests {
     use crate::controller::*;
-    use crate::pattern::{Event, EventType, FractionalDuration, NamedPattern, Note};
+    use crate::dur::Dur;
+    use crate::pattern::{Event, EventType, NamedPattern, Note};
     use crate::plugin::create_router;
     use axum_test::TestServer;
     use rtrb::RingBuffer;
@@ -109,12 +110,12 @@ mod tests {
                 events: vec![Event {
                     action: EventType::NoteEvent(Note {
                         note_num: 60 as u8,
-                        dur: FractionalDuration { num: 1, den: 2 },
+                        dur: Dur { num: 1, den: 2 },
                         velocity: 0.8,
                     }),
-                    dur: FractionalDuration { num: 1, den: 1 },
+                    dur: Dur { num: 1, den: 1 },
                 },],
-                length_bars: Some(FractionalDuration { num: 1, den: 1 }),
+                length_bars: Some(Dur { num: 1, den: 1 }),
                 name: String::from("foo"),
             })
         );
@@ -161,12 +162,12 @@ mod tests {
                 events: vec![Event {
                     action: EventType::NoteEvent(Note {
                         note_num: 60 as u8,
-                        dur: FractionalDuration { num: 1, den: 2 },
+                        dur: Dur { num: 1, den: 2 },
                         velocity: 0.8,
                     }),
-                    dur: FractionalDuration { num: 1, den: 1 },
+                    dur: Dur { num: 1, den: 1 },
                 },],
-                length_bars: Some(FractionalDuration { num: 1, den: 1 }),
+                length_bars: Some(Dur { num: 1, den: 1 }),
                 name: String::from("foo"),
             })
         );

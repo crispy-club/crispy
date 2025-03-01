@@ -1,7 +1,7 @@
 use crate::controller::{start_pattern, stop_pattern, Command, Controller};
+use crate::dur::Dur;
 use crate::pattern::{
-    FractionalDuration, NamedPattern, NoteType, Pattern, PreciseEventType, PrecisePattern,
-    SimpleNoteEvent,
+    NamedPattern, NoteType, Pattern, PreciseEventType, PrecisePattern, SimpleNoteEvent,
 };
 use axum::{routing::post, Router};
 use nih_plug::prelude::*;
@@ -124,9 +124,7 @@ impl Live {
         named_pattern: NamedPattern,
     ) -> Result<(), Box<dyn Error>> {
         let transport = context.transport();
-        let pattern_length = named_pattern
-            .length_bars
-            .or(Some(FractionalDuration { num: 1, den: 1 }));
+        let pattern_length = named_pattern.length_bars.or(Some(Dur { num: 1, den: 1 }));
         let precise_pattern = PrecisePattern::from(
             &mut Pattern {
                 channel: Some(named_pattern.channel),
@@ -278,9 +276,9 @@ pub fn create_router(commands: Arc<Controller>) -> Router {
 }
 
 impl Plugin for Live {
-    const NAME: &'static str = "LiveCode";
+    const NAME: &'static str = "CODE";
     const VENDOR: &'static str = "Brian Sorahan";
-    const URL: &'static str = "https://youtu.be/dQw4w9WgXcQ";
+    const URL: &'static str = "https://crispy.club";
     const EMAIL: &'static str = "info@example.com";
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -381,8 +379,9 @@ impl Plugin for Live {
 }
 
 impl ClapPlugin for Live {
-    const CLAP_ID: &'static str = "net.sorahan.brian.live";
-    const CLAP_DESCRIPTION: Option<&'static str> = Some("Trigger a midi note every beat");
+    const CLAP_ID: &'static str = "club.crispy";
+    const CLAP_DESCRIPTION: Option<&'static str> =
+        Some("MIDI sequencing via code that is edited on the fly");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[ClapFeature::NoteEffect, ClapFeature::Utility];

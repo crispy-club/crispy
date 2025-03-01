@@ -1,18 +1,13 @@
+use crate::dur::Dur;
 use num::integer::lcm;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
-pub struct FractionalDuration {
-    pub num: i64,
-    pub den: i64,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Note {
     pub note_num: u8,
-    pub dur: FractionalDuration,
+    pub dur: Dur,
     pub velocity: f32,
 }
 
@@ -33,14 +28,14 @@ pub enum EventType {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Event {
     pub action: EventType,
-    pub dur: FractionalDuration,
+    pub dur: Dur,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Pattern {
     pub channel: Option<u8>,
     pub events: Vec<Event>,
-    pub length_bars: Option<FractionalDuration>,
+    pub length_bars: Option<Dur>,
 }
 
 impl Pattern {
@@ -59,7 +54,7 @@ impl Pattern {
             .map(|event| {
                 let mut clone = event.clone();
                 let multiplier = least_common_multiple / event.dur.den;
-                clone.dur = FractionalDuration {
+                clone.dur = Dur {
                     num: event.dur.num * multiplier,
                     den: least_common_multiple,
                 };
@@ -74,7 +69,7 @@ impl Pattern {
 pub struct NamedPattern {
     pub channel: u8,
     pub events: Vec<Event>,
-    pub length_bars: Option<FractionalDuration>,
+    pub length_bars: Option<Dur>,
     pub name: String,
 }
 
@@ -416,10 +411,10 @@ impl fmt::Debug for PrecisePattern {
 
 #[cfg(test)]
 mod tests {
+    use crate::dur::Dur;
     use crate::pattern::{
-        compute_extra_samples, CtrlEvent, Event, EventType, FractionalDuration, Note, NoteType,
-        Pattern, PreciseEventType, PrecisePattern, SimpleCtrlEvent, SimpleNoteEvent,
-        VoiceTerminatedEvent,
+        compute_extra_samples, CtrlEvent, Event, EventType, Note, NoteType, Pattern,
+        PreciseEventType, PrecisePattern, SimpleCtrlEvent, SimpleNoteEvent, VoiceTerminatedEvent,
     };
     use std::collections::HashMap;
 
@@ -464,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_fractional_duration_clone() {
-        let dur = FractionalDuration { num: 1, den: 4 };
+        let dur = Dur { num: 1, den: 4 };
         let clone = dur.clone();
         assert_eq!(dur, clone);
     }
@@ -474,7 +469,7 @@ mod tests {
         let note = Note {
             note_num: 60,
             velocity: 0.5,
-            dur: FractionalDuration { num: 1, den: 4 },
+            dur: Dur { num: 1, den: 4 },
         };
         let clone = note.clone();
         assert_eq!(note, clone);
@@ -486,9 +481,9 @@ mod tests {
             action: EventType::NoteEvent(Note {
                 note_num: 60,
                 velocity: 0.5,
-                dur: FractionalDuration { num: 1, den: 4 },
+                dur: Dur { num: 1, den: 4 },
             }),
-            dur: FractionalDuration { num: 1, den: 2 },
+            dur: Dur { num: 1, den: 2 },
         };
         let clone = event.clone();
         assert_eq!(event, clone);
@@ -505,23 +500,23 @@ mod tests {
     fn test_precise_pattern_notes() -> Result<(), String> {
         let pattern = Pattern {
             channel: Some(1),
-            length_bars: Some(FractionalDuration { num: 1, den: 2 }),
+            length_bars: Some(Dur { num: 1, den: 2 }),
             events: vec![
                 Event {
                     action: EventType::NoteEvent(Note {
                         note_num: 60,
                         velocity: 0.8,
-                        dur: FractionalDuration { num: 1, den: 4 },
+                        dur: Dur { num: 1, den: 4 },
                     }),
-                    dur: FractionalDuration { num: 1, den: 2 },
+                    dur: Dur { num: 1, den: 2 },
                 },
                 Event {
                     action: EventType::NoteEvent(Note {
                         note_num: 96,
                         velocity: 0.8,
-                        dur: FractionalDuration { num: 1, den: 4 },
+                        dur: Dur { num: 1, den: 4 },
                     }),
-                    dur: FractionalDuration { num: 1, den: 2 },
+                    dur: Dur { num: 1, den: 2 },
                 },
             ],
         };
@@ -606,21 +601,21 @@ mod tests {
     fn test_precise_pattern_ctrl() -> Result<(), String> {
         let pattern = Pattern {
             channel: Some(1),
-            length_bars: Some(FractionalDuration { num: 1, den: 2 }),
+            length_bars: Some(Dur { num: 1, den: 2 }),
             events: vec![
                 Event {
                     action: EventType::Ctrl(CtrlEvent {
                         cc: 102,
                         value: 0.8,
                     }),
-                    dur: FractionalDuration { num: 1, den: 2 },
+                    dur: Dur { num: 1, den: 2 },
                 },
                 Event {
                     action: EventType::Ctrl(CtrlEvent {
                         cc: 102,
                         value: 0.4,
                     }),
-                    dur: FractionalDuration { num: 1, den: 2 },
+                    dur: Dur { num: 1, den: 2 },
                 },
             ],
         };
@@ -651,23 +646,23 @@ mod tests {
     fn test_precise_pattern_overlapping_notes() -> Result<(), String> {
         let pattern = Pattern {
             channel: Some(1),
-            length_bars: Some(FractionalDuration { num: 1, den: 1 }),
+            length_bars: Some(Dur { num: 1, den: 1 }),
             events: vec![
                 Event {
                     action: EventType::NoteEvent(Note {
                         note_num: 60,
                         velocity: 0.8,
-                        dur: FractionalDuration { num: 2, den: 1 },
+                        dur: Dur { num: 2, den: 1 },
                     }),
-                    dur: FractionalDuration { num: 1, den: 2 },
+                    dur: Dur { num: 1, den: 2 },
                 },
                 Event {
                     action: EventType::NoteEvent(Note {
                         note_num: 96,
                         velocity: 0.8,
-                        dur: FractionalDuration { num: 2, den: 1 },
+                        dur: Dur { num: 2, den: 1 },
                     }),
-                    dur: FractionalDuration { num: 1, den: 2 },
+                    dur: Dur { num: 1, den: 2 },
                 },
             ],
         };

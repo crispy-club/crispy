@@ -5,28 +5,6 @@ on:
       - 'README.md'
   workflow_dispatch:
 jobs:
-  build_python_client:
-    name: Build Python Client
-    runs-on: ubuntu-latest
-    permissions: write-all
-    container:
-      image: "python:3.13.1-bookworm"
-    steps:
-      - uses: actions/checkout@v2
-      - name: Install and build
-        run: |
-          pip install uv==0.5.11
-          export PYTHONPATH="$GITHUB_WORKSPACE"
-          uv run invoke build
-      - name: Build test coverage file
-        run: |
-          uv run pytest --cov=crispy --cov-report=xml
-      - name: Upload coverage reports to Codecov (python)
-        uses: codecov/codecov-action@main
-        with:
-          fail_ci_if_error: true
-          token: ${{ secrets.CODECOV_TOKEN }}
-          verbose: true
   build_plugin:
     name: Build Plugin
     runs-on: ubuntu-latest
@@ -40,8 +18,8 @@ jobs:
           RUSTFLAGS: '-Cinstrument-coverage'
           LLVM_PROFILE_FILE: 'cargo-test-%p-%m.profraw'
         run: |
-          rustup component add llvm-tools-preview
-          cargo test --package crispy
+          rustup component add llvm-tools-preview clippy
+          cargo test --package crispy_code
           cargo install grcov
           mkdir -p target/coverage
           grcov . --binary-path ./target/debug/deps/ -s . -t lcov --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/tests.lcov
