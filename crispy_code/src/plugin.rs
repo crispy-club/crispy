@@ -5,6 +5,8 @@ use crate::pattern::{
 };
 use axum::{routing::post, Router};
 use nih_plug::prelude::*;
+use reqwest;
+use reqwest::header::CONTENT_TYPE;
 use rtrb::{Consumer, PopError, Producer, RingBuffer};
 use std::collections::HashMap;
 use std::error::Error;
@@ -426,4 +428,16 @@ mod tests {
         ));
         Ok(())
     }
+}
+
+pub async fn play(pattern: NamedPattern) -> Result<(), Box<dyn Error>> {
+    let client = reqwest::Client::new();
+    let _res = client
+        .post("http://127.0.0.1:3000/start/foo")
+        .header(CONTENT_TYPE, "application/json")
+        .json(&pattern)
+        .send()
+        .await?;
+
+    Ok(())
 }

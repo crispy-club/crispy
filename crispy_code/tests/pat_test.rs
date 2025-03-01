@@ -75,6 +75,51 @@ fn test_pattern_two_notes() {
 }
 
 #[test]
+fn test_pattern_four_notes() {
+    assert_eq!(
+        pat("C3k E3k G3k A3k"),
+        Ok(Pattern {
+            channel: None,
+            length_bars: Some(BAR),
+            events: vec![
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 60,
+                        velocity: 0.41,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 64,
+                        velocity: 0.41,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 67,
+                        velocity: 0.41,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 69,
+                        velocity: 0.41,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+            ],
+        })
+    );
+}
+
+#[test]
 fn test_pattern_single_note_plus_rest() {
     assert_eq!(
         pat("[Cx .]"),

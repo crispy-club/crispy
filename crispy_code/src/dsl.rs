@@ -18,7 +18,6 @@ pub fn pat(def: &str) -> Result<Pattern, ParseError> {
 
 fn get_events(def: &str, len_bars: Dur) -> Result<Vec<Event>, ParseError> {
     let root_elem = get_root_elem(def)?;
-    println!("root_elem {:?}", root_elem);
     Ok(transform(root_elem, len_bars))
 }
 
