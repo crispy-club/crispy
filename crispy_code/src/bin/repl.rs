@@ -1,4 +1,7 @@
-use rhai::Engine;
+use crispy_code::dsl::notes;
+use crispy_code::pattern::NamedPattern;
+use crispy_code::plugin::play;
+use rhai::{Dynamic, Engine, EvalAltResult};
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::{History, SearchDirection};
@@ -126,6 +129,21 @@ fn setup_editor() -> DefaultEditor {
 fn main() {
     // Initialize scripting engine
     let mut engine = Engine::new();
+
+    engine.build_type::<NamedPattern>();
+
+    engine.register_fn("notes", notes);
+    engine.register_fn(
+        "play",
+        |np: NamedPattern| -> Result<(), Box<EvalAltResult>> {
+            play(np).map_err(|e| {
+                Box::new(EvalAltResult::ErrorRuntime(
+                    Dynamic::from(e.to_string()),
+                    rhai::Position::NONE,
+                ))
+            })
+        },
+    );
 
     // REPL line editor setup
     let mut rl = setup_editor();

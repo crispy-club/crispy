@@ -1,2 +1,6 @@
 #V2
 keys
+let pattern = notes("[C D E G]")
+let pattern = notes("[C D E G]");
+pattern
+pattern;

@@ -18,7 +18,7 @@ logos = "0.15.0"
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs"] }
 num = "0.4.3"
 regex = "1.11.1"
-reqwest = { version = "0.12.12", features = ["json"] }
+reqwest = { version = "0.12.12", features = ["blocking", "json"] }
 rhai = "1.21.0"
 rtrb = "0.3.1"
 rustyline = "15.0.0"

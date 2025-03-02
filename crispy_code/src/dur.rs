@@ -136,4 +136,11 @@ mod tests {
         let half = Dur::new(1, 2);
         assert_eq!(half.div_int(3 as i64), Dur::new(1, 6));
     }
+
+    #[test]
+    fn test_fractional_duration_clone() {
+        let dur = Dur { num: 1, den: 4 };
+        let clone = dur.clone();
+        assert_eq!(dur, clone);
+    }
 }

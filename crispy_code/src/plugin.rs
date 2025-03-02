@@ -1,8 +1,7 @@
 use crate::controller::{start_pattern, stop_pattern, Command, Controller};
 use crate::dur::Dur;
-use crate::pattern::{
-    NamedPattern, NoteType, Pattern, PreciseEventType, PrecisePattern, SimpleNoteEvent,
-};
+use crate::pattern::{NamedPattern, Pattern};
+use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
 use axum::{routing::post, Router};
 use nih_plug::prelude::*;
 use reqwest;
@@ -430,14 +429,12 @@ mod tests {
     }
 }
 
-pub async fn play(pattern: NamedPattern) -> Result<(), Box<dyn Error>> {
-    let client = reqwest::Client::new();
-    let _res = client
+pub fn play(pattern: NamedPattern) -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
         .post("http://127.0.0.1:3000/start/foo")
         .header(CONTENT_TYPE, "application/json")
         .json(&pattern)
-        .send()
-        .await?;
-
+        .send()?;
     Ok(())
 }
