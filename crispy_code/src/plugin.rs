@@ -2,6 +2,7 @@ use crate::controller::{start_pattern, stop_pattern, Command, Controller};
 use crate::pattern::{NamedPattern, Pattern};
 use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
 use axum::{routing::post, Router};
+use log::debug;
 use nih_plug::prelude::*;
 use reqwest;
 use reqwest::header::CONTENT_TYPE;
@@ -430,6 +431,7 @@ mod tests {
 
 pub fn play(pattern: NamedPattern) -> Result<(), reqwest::Error> {
     let client = reqwest::blocking::Client::new();
+    debug!("playing {}", pattern.name);
     client
         .post("http://127.0.0.1:3000/start/foo")
         .header(CONTENT_TYPE, "application/json")

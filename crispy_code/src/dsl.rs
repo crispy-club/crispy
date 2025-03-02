@@ -1,15 +1,17 @@
 use crate::dur::Dur;
 use crate::lex::Token;
 use crate::parse::{Element, ParseError, Parser};
-use crate::pattern::{Event, EventType, Pattern};
+use crate::pattern::{Event, EventType, NamedPattern};
 use logos::Logos;
+use moby_name_gen::random_name;
 
 // Covered by integration tests
 #[allow(dead_code)]
-pub fn notes(def: &str) -> Result<Pattern, ParseError> {
+pub fn notes(def: &str) -> Result<NamedPattern, ParseError> {
     let len_bars = Dur::new(1, 1);
     let events = get_events(def, len_bars)?;
-    Ok(Pattern {
+    Ok(NamedPattern {
+        name: random_name(),
         channel: 1,
         events: events,
         length_bars: len_bars,

@@ -62,8 +62,6 @@ impl Pattern {
             .collect();
         least_common_multiple
     }
-
-    // pub fn named(name: &str) -> NamedPattern {}
 }
 
 #[derive(Clone, CustomType, Debug, Deserialize, PartialEq, Serialize)]
@@ -72,6 +70,17 @@ pub struct NamedPattern {
     pub events: Vec<Event>,
     pub length_bars: Dur,
     pub name: String,
+}
+
+impl NamedPattern {
+    pub fn named(&self, name: &str) -> NamedPattern {
+        NamedPattern {
+            channel: self.channel,
+            events: self.events.clone(),
+            length_bars: self.length_bars,
+            name: String::from(name),
+        }
+    }
 }
 
 #[cfg(test)]
