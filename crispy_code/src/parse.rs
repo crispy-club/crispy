@@ -1,11 +1,35 @@
 use crate::lex::Token;
 use crate::pattern::Note;
+use std::error::Error;
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseError {
     MissingAlternationAnchor,
     MissingAlternationDelimiter,
     MissingGroupDelimiter,
+}
+
+impl Error for ParseError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+    }
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ParseError::MissingAlternationAnchor => {
+                write!(f, "missing event before the `<` of an alternation")
+            }
+            ParseError::MissingAlternationDelimiter => {
+                write!(f, "missing `<` or `>` for alternation")
+            }
+            ParseError::MissingGroupDelimiter => {
+                write!(f, "missing `[` or `]` for group")
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

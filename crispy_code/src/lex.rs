@@ -7,28 +7,35 @@ use std::sync::LazyLock;
 pub static DEFAULT_OCTAVE: i32 = 3;
 pub static DEFAULT_VELOCITY: f32 = 0.8;
 
-fn get_pitch_class(c: char) -> i32 {
-    match c {
-        'C' => 0,
-        'D' => 2,
-        'E' => 4,
-        'F' => 5,
-        'G' => 7,
-        'A' => 9,
-        'B' => 11,
-        _ => panic!("unknown pitch class {}", c),
+fn get_pitch_class(input: &str) -> i32 {
+    let copt = input.chars().next();
+    match copt {
+        None => 0,
+        Some(c) => match c {
+            'C' => 0,
+            'D' => 2,
+            'E' => 4,
+            'F' => 5,
+            'G' => 7,
+            'A' => 9,
+            'B' => 11,
+            _ => panic!("unknown pitch class {}", c),
+        },
     }
 }
 
 fn get_velocity(c: char) -> f32 {
-    // 'a' -> 97
-    // 'z' -> 122
-    let ascii_code = c as u8;
-    return ((((ascii_code as f32) - 96.0) / 27.0) * 100.0).round() / 100.0;
+    match c {
+        '0' => 0.0,
+        _ => {
+            let ascii_code = c as u8; // 'a' -> 97, 'z' -> 122
+            ((((ascii_code as f32) - 96.0) / 27.0) * 100.0).round() / 100.0
+        }
+    }
 }
 
 static NOTE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^([CDEFGAB])(')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?(@\d+)?(:\d+)?(;\d+)?$").unwrap()
+    Regex::new(r"^([CDEFGAB])?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?(@\d+)?(:\d+)?(;\d+)?$").unwrap()
 });
 
 fn parse_note_expr(def: &str) -> Option<Note> {
@@ -62,7 +69,10 @@ fn parse_note_repeat_grouped(def: &str) -> Option<(Note, u32)> {
 fn parse_note(def: &str) -> Option<(Note, u32, u32, u32)> {
     let caps = NOTE_REGEX.captures(def).unwrap();
     assert_eq!(caps.len(), 8);
-    let mut note_num = get_pitch_class(caps[1].chars().next().unwrap());
+    let mut note_num = 0;
+    if let Some(matched) = caps.get(1) {
+        note_num = get_pitch_class(matched.as_str());
+    }
     if let Some(_sharp) = caps.get(2) {
         note_num += 1
     }
@@ -104,6 +114,11 @@ fn parse_note(def: &str) -> Option<(Note, u32, u32, u32)> {
     ))
 }
 
+fn parse_rest_repeat(def: &str) -> Option<u32> {
+    let repeats: u32 = def[2..].parse().unwrap();
+    Some(repeats)
+}
+
 fn parse_rest_tie(def: &str) -> Option<u32> {
     let ties: u32 = def[2..].parse().unwrap();
     Some(ties)
@@ -120,14 +135,16 @@ pub enum Token {
     GroupStart,
     #[token("]")]
     GroupEnd,
-    #[regex(r"[CDEFGAB](')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?:(\d+)", |lex| parse_note_repeat(lex.slice()))]
+    #[regex(r"[CDEFGAB]?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?:(\d+)", |lex| parse_note_repeat(lex.slice()))]
     NoteRepeat((Note, u32)),
-    #[regex(r"[CDEFGAB](')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?;(\d+)", |lex| parse_note_repeat_grouped(lex.slice()))]
+    #[regex(r"[CDEFGAB]?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?;(\d+)", |lex| parse_note_repeat_grouped(lex.slice()))]
     NoteRepeatGrouped((Note, u32)),
-    #[regex(r"[CDEFGAB](')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?@(\d+)", |lex| parse_note_tie(lex.slice()))]
+    #[regex(r"[CDEFGAB]?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?@(\d+)", |lex| parse_note_tie(lex.slice()))]
     NoteTie((Note, u32)),
-    #[regex(r"[CDEFGAB](')?(-2|-1|0|1|2|3|4|5|6|7)?([a-z])?", |lex| parse_note_expr(lex.slice()))]
+    #[regex(r"[CDEFGAB]?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?", |lex| parse_note_expr(lex.slice()))]
     NoteExpr(Note),
+    #[regex(r"\.:(\d+)", |lex| parse_rest_repeat(lex.slice()))]
+    RestRepeat(u32),
     #[regex(r"\.@(\d+)", |lex| parse_rest_tie(lex.slice()))]
     RestTie(u32),
     #[token(".")]

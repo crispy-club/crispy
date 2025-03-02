@@ -6,7 +6,7 @@ use logos::Logos;
 
 // Covered by integration tests
 #[allow(dead_code)]
-pub fn pat(def: &str) -> Result<Pattern, ParseError> {
+pub fn notes(def: &str) -> Result<Pattern, ParseError> {
     let len_bars = Dur::new(1, 1);
     let events = get_events(def, len_bars)?;
     Ok(Pattern {
@@ -18,7 +18,6 @@ pub fn pat(def: &str) -> Result<Pattern, ParseError> {
 
 fn get_events(def: &str, len_bars: Dur) -> Result<Vec<Event>, ParseError> {
     let root_elem = get_root_elem(def)?;
-    println!("root_elem {:?}", root_elem);
     Ok(transform(root_elem, len_bars))
 }
 
@@ -47,6 +46,11 @@ fn desugar(tokens: Vec<Token>) -> Vec<Token> {
             }
             Token::RestTie(ties) => {
                 for _ in 0..ties {
+                    res.push(Token::Rest);
+                }
+            }
+            Token::RestRepeat(repeats) => {
+                for _ in 0..repeats {
                     res.push(Token::Rest);
                 }
             }
