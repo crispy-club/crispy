@@ -1,4 +1,4 @@
-use crispy_code::dsl::pat;
+use crispy_code::dsl::notes;
 use crispy_code::dur::{Dur, BAR};
 use crispy_code::parse::ParseError;
 use crispy_code::pattern::{Event, EventType, Note, Pattern};
@@ -7,7 +7,7 @@ use pretty_assertions::assert_eq;
 #[test]
 fn test_pattern_empty() {
     assert_eq!(
-        pat("[]"),
+        notes("[]"),
         Ok(Pattern {
             channel: None,
             length_bars: Some(BAR),
@@ -18,18 +18,18 @@ fn test_pattern_empty() {
 
 #[test]
 fn test_pattern_missing_group_delimiter() {
-    assert_eq!(pat("["), Err(ParseError::MissingGroupDelimiter));
-    assert_eq!(pat("]"), Err(ParseError::MissingGroupDelimiter));
-    assert_eq!(pat("] C3"), Err(ParseError::MissingGroupDelimiter));
-    assert_eq!(pat("C3 ]"), Err(ParseError::MissingGroupDelimiter));
-    assert_eq!(pat("[ C3"), Err(ParseError::MissingGroupDelimiter));
-    assert_eq!(pat("C3 ["), Err(ParseError::MissingGroupDelimiter));
+    assert_eq!(notes("["), Err(ParseError::MissingGroupDelimiter));
+    assert_eq!(notes("]"), Err(ParseError::MissingGroupDelimiter));
+    assert_eq!(notes("] C3"), Err(ParseError::MissingGroupDelimiter));
+    assert_eq!(notes("C3 ]"), Err(ParseError::MissingGroupDelimiter));
+    assert_eq!(notes("[ C3"), Err(ParseError::MissingGroupDelimiter));
+    assert_eq!(notes("C3 ["), Err(ParseError::MissingGroupDelimiter));
 }
 
 #[test]
 fn test_pattern_single_note() {
     assert_eq!(
-        pat("[Cx]"),
+        notes("[Cx]"),
         Ok(Pattern {
             channel: None,
             length_bars: Some(BAR),
@@ -48,7 +48,7 @@ fn test_pattern_single_note() {
 #[test]
 fn test_pattern_two_notes() {
     assert_eq!(
-        pat("[Cx D'g]"),
+        notes("[Cx D'g]"),
         Ok(Pattern {
             channel: None,
             length_bars: Some(BAR),
@@ -75,9 +75,38 @@ fn test_pattern_two_notes() {
 }
 
 #[test]
+fn test_pattern_two_notes_just_velocity() {
+    assert_eq!(
+        notes("x g"),
+        Ok(Pattern {
+            channel: None,
+            length_bars: Some(BAR),
+            events: vec![
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 60,
+                        velocity: 0.89,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 2),
+                },
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 60,
+                        velocity: 0.26,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 2),
+                },
+            ],
+        }),
+    );
+}
+
+#[test]
 fn test_pattern_four_notes() {
     assert_eq!(
-        pat("C3k E3k G3k A3k"),
+        notes("C3k E3k G3k A3k"),
         Ok(Pattern {
             channel: None,
             length_bars: Some(BAR),
@@ -122,7 +151,7 @@ fn test_pattern_four_notes() {
 #[test]
 fn test_pattern_single_note_plus_rest() {
     assert_eq!(
-        pat("[Cx .]"),
+        notes("[Cx .]"),
         Ok(Pattern {
             channel: None,
             length_bars: Some(BAR),
@@ -144,7 +173,7 @@ fn test_pattern_single_note_plus_rest() {
     );
 
     assert_eq!(
-        pat("Cx ."),
+        notes("Cx ."),
         Ok(Pattern {
             channel: None,
             length_bars: Some(BAR),
@@ -167,9 +196,75 @@ fn test_pattern_single_note_plus_rest() {
 }
 
 #[test]
+fn test_pattern_single_note_plus_rest_tie() {
+    assert_eq!(
+        notes("[Cx .@3]"),
+        Ok(Pattern {
+            channel: None,
+            length_bars: Some(BAR),
+            events: vec![
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 60,
+                        velocity: 0.89,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::Rest,
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::Rest,
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::Rest,
+                    dur: Dur::new(1, 4),
+                },
+            ],
+        }),
+    );
+}
+
+#[test]
+fn test_pattern_single_note_plus_rest_repeat() {
+    assert_eq!(
+        notes("[Cx .:3]"),
+        Ok(Pattern {
+            channel: None,
+            length_bars: Some(BAR),
+            events: vec![
+                Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: 60,
+                        velocity: 0.89,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::Rest,
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::Rest,
+                    dur: Dur::new(1, 4),
+                },
+                Event {
+                    action: EventType::Rest,
+                    dur: Dur::new(1, 4),
+                },
+            ],
+        }),
+    );
+}
+
+#[test]
 fn test_pattern_with_ties() {
     assert_eq!(
-        pat("[Cx Gp _ _]"),
+        notes("[Cx Gp _ _]"),
         Ok(Pattern {
             channel: None,
             length_bars: Some(BAR),
@@ -195,7 +290,7 @@ fn test_pattern_with_ties() {
     );
 
     assert_eq!(
-        pat("[Cx Gp@3]"),
+        notes("[Cx Gp@3]"),
         Ok(Pattern {
             channel: None,
             length_bars: Some(BAR),
@@ -221,7 +316,7 @@ fn test_pattern_with_ties() {
     );
 
     assert_eq!(
-        pat("[Cx .@2 Eo]"),
+        notes("[Cx .@2 Eo]"),
         Ok(Pattern {
             channel: None,
             length_bars: Some(BAR),
@@ -257,7 +352,7 @@ fn test_pattern_with_ties() {
 
 #[test]
 fn test_pattern_with_subpattern_first() {
-    let actual = pat("[[D'g G4u] Cx]");
+    let actual = notes("[[D'g G4u] Cx]");
     let expect = Pattern {
         channel: None,
         length_bars: Some(BAR),
@@ -293,7 +388,7 @@ fn test_pattern_with_subpattern_first() {
 
 #[test]
 fn test_pattern_with_subpattern_last() {
-    let actual = pat("[Cx [D'g G4u]]");
+    let actual = notes("[Cx [D'g G4u]]");
     let expect = Pattern {
         channel: None,
         length_bars: Some(BAR),
@@ -329,7 +424,7 @@ fn test_pattern_with_subpattern_last() {
 
 #[test]
 fn test_pattern_with_nongrouping_repeat() {
-    let actual = pat("[Cx D'g:2 G4u]");
+    let actual = notes("[Cx D'g:2 G4u]");
     let expect = Pattern {
         channel: None,
         length_bars: Some(BAR),
@@ -373,7 +468,7 @@ fn test_pattern_with_nongrouping_repeat() {
 
 #[test]
 fn test_pattern_with_grouping_repeat() {
-    let actual = pat("[Cx D'g;2 G4u]");
+    let actual = notes("[Cx D'g;2 G4u]");
     let expect = Pattern {
         channel: None,
         length_bars: Some(BAR),
@@ -417,7 +512,7 @@ fn test_pattern_with_grouping_repeat() {
 
 #[test]
 fn test_pattern_with_alternation() {
-    let actual = pat("[Cx <D'g G4u>]");
+    let actual = notes("[Cx <D'g G4u>]");
     let expect = Pattern {
         channel: None,
         length_bars: Some(BAR),
@@ -461,7 +556,7 @@ fn test_pattern_with_alternation() {
 
 #[test]
 fn test_pattern_with_nested_alternation() {
-    let actual = pat("Cx <D'g <G4u E2l>>");
+    let actual = notes("Cx <D'g <G4u E2l>>");
     let expect = Pattern {
         channel: None,
         length_bars: Some(BAR),
@@ -537,14 +632,14 @@ fn test_pattern_with_nested_alternation() {
 
 #[test]
 fn test_pattern_missing_alternation_delimiter() {
-    let actual = pat("Cx <D'g G4u");
+    let actual = notes("Cx <D'g G4u");
     assert_eq!(actual, Err(ParseError::MissingAlternationDelimiter));
-    let actual = pat("Cx D'g G4u>");
+    let actual = notes("Cx D'g G4u>");
     assert_eq!(actual, Err(ParseError::MissingAlternationDelimiter));
 }
 
 #[test]
 fn test_pattern_missing_alternation_anchor() {
-    let actual = pat("<D'g G4u>");
+    let actual = notes("<D'g G4u>");
     assert_eq!(actual, Err(ParseError::MissingAlternationAnchor));
 }

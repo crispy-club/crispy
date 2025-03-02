@@ -6,7 +6,7 @@ use logos::Logos;
 
 // Covered by integration tests
 #[allow(dead_code)]
-pub fn pat(def: &str) -> Result<Pattern, ParseError> {
+pub fn notes(def: &str) -> Result<Pattern, ParseError> {
     let len_bars = Dur::new(1, 1);
     let events = get_events(def, len_bars)?;
     Ok(Pattern {
@@ -46,6 +46,11 @@ fn desugar(tokens: Vec<Token>) -> Vec<Token> {
             }
             Token::RestTie(ties) => {
                 for _ in 0..ties {
+                    res.push(Token::Rest);
+                }
+            }
+            Token::RestRepeat(repeats) => {
+                for _ in 0..repeats {
                     res.push(Token::Rest);
                 }
             }

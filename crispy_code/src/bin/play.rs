@@ -1,4 +1,4 @@
-use crispy_code::dsl::pat;
+use crispy_code::dsl::notes;
 use crispy_code::pattern::NamedPattern;
 use crispy_code::plugin::play;
 use std::error::Error;
@@ -8,7 +8,7 @@ use tokio;
 fn main() -> Result<(), Box<dyn Error>> {
     let mut buffer = String::new();
     let _input = io::stdin().read_line(&mut buffer)?;
-    let pattern = pat(buffer.as_str().trim())?;
+    let pattern = notes(buffer.as_str().trim())?;
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
