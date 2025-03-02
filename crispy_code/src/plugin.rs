@@ -431,7 +431,6 @@ mod tests {
 
 pub fn play(pattern: NamedPattern) -> Result<(), reqwest::Error> {
     let client = reqwest::blocking::Client::new();
-    debug!("playing {}", pattern.name);
     client
         .post("http://127.0.0.1:3000/start/foo")
         .header(CONTENT_TYPE, "application/json")
