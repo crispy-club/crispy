@@ -32,9 +32,9 @@ pub struct Event {
 
 #[derive(Clone, CustomType, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Pattern {
-    pub channel: Option<u8>,
+    pub channel: u8,
     pub events: Vec<Event>,
-    pub length_bars: Option<Dur>,
+    pub length_bars: Dur,
 }
 
 impl Pattern {
@@ -62,13 +62,15 @@ impl Pattern {
             .collect();
         least_common_multiple
     }
+
+    // pub fn named(name: &str) -> NamedPattern {}
 }
 
 #[derive(Clone, CustomType, Debug, Deserialize, PartialEq, Serialize)]
 pub struct NamedPattern {
     pub channel: u8,
     pub events: Vec<Event>,
-    pub length_bars: Option<Dur>,
+    pub length_bars: Dur,
     pub name: String,
 }
 

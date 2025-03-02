@@ -71,22 +71,18 @@ fn insert_note(
     events_map: &mut HashMap<usize, Vec<PreciseEventType>>,
     event: &Event,
     note: &Note,
-    channel: Option<u8>,
+    channel: u8,
     tick_length_samples: i64,
     pattern_length_samples: usize,
     sample_idx: usize,
 ) {
-    let note_channel: u8 = match channel {
-        None => 1,
-        Some(ch) => ch,
-    };
     events_map.insert(
         sample_idx,
         vec![PreciseEventType::Note(SimpleNoteEvent {
             note_type: NoteType::On,
             timing: sample_idx as u32,
             voice_id: None,
-            channel: note_channel,
+            channel: channel,
             note: note.note_num,
             velocity: note.velocity,
         })],
@@ -102,7 +98,7 @@ fn insert_note(
             note_type: NoteType::Off,
             timing: note_off_timing,
             voice_id: None,
-            channel: note_channel,
+            channel: channel,
             note: note.note_num,
             velocity: 0.0,
         })],
@@ -112,18 +108,14 @@ fn insert_note(
 fn insert_ctrl(
     events_map: &mut HashMap<usize, Vec<PreciseEventType>>,
     ctrl: &CtrlEvent,
-    channel: Option<u8>,
+    channel: u8,
     sample_idx: usize,
 ) {
-    let ctrl_channel: u8 = match channel {
-        None => 1,
-        Some(ch) => ch,
-    };
     events_map.insert(
         sample_idx,
         vec![PreciseEventType::Ctrl(SimpleCtrlEvent {
             timing: sample_idx as u32,
-            channel: ctrl_channel,
+            channel: channel,
             cc: ctrl.cc,
             value: ctrl.value,
         })],
@@ -133,7 +125,7 @@ fn insert_ctrl(
 fn insert_event(
     events_map: &mut HashMap<usize, Vec<PreciseEventType>>,
     event: &Event,
-    channel: Option<u8>,
+    channel: u8,
     tick_length_samples: i64,
     pattern_length_samples: usize,
     sample_idx: usize,
@@ -192,7 +184,7 @@ impl PrecisePattern {
         let least_common_multiple = pattern.compute_events_lcm();
         let samples_per_bar = (sample_rate as f64 * (240.0 / tempo)) as i64;
         let pattern_length_samples =
-            (pattern.length_bars.unwrap().num * samples_per_bar) / pattern.length_bars.unwrap().den;
+            (pattern.length_bars.num * samples_per_bar) / pattern.length_bars.den;
         let tick_length_samples = pattern_length_samples / least_common_multiple;
         let samples_remainder = pattern_length_samples % least_common_multiple;
         let extra_samples = compute_extra_samples(samples_remainder, pattern.events.len());
@@ -398,8 +390,8 @@ mod tests {
     #[test]
     fn test_precise_pattern_notes() -> Result<(), String> {
         let pattern = Pattern {
-            channel: Some(1),
-            length_bars: Some(Dur { num: 1, den: 2 }),
+            channel: 1,
+            length_bars: Dur { num: 1, den: 2 },
             events: vec![
                 Event {
                     action: EventType::NoteEvent(Note {
@@ -499,8 +491,8 @@ mod tests {
     #[test]
     fn test_precise_pattern_ctrl() -> Result<(), String> {
         let pattern = Pattern {
-            channel: Some(1),
-            length_bars: Some(Dur { num: 1, den: 2 }),
+            channel: 1,
+            length_bars: Dur { num: 1, den: 2 },
             events: vec![
                 Event {
                     action: EventType::Ctrl(CtrlEvent {
@@ -544,8 +536,8 @@ mod tests {
     #[test]
     fn test_precise_pattern_overlapping_notes() -> Result<(), String> {
         let pattern = Pattern {
-            channel: Some(1),
-            length_bars: Some(Dur { num: 1, den: 1 }),
+            channel: 1,
+            length_bars: Dur { num: 1, den: 1 },
             events: vec![
                 Event {
                     action: EventType::NoteEvent(Note {

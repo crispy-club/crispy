@@ -10,9 +10,9 @@ pub fn notes(def: &str) -> Result<Pattern, ParseError> {
     let len_bars = Dur::new(1, 1);
     let events = get_events(def, len_bars)?;
     Ok(Pattern {
-        channel: None,
+        channel: 1,
         events: events,
-        length_bars: Some(len_bars),
+        length_bars: len_bars,
     })
 }
 
