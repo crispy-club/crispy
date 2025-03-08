@@ -64,7 +64,7 @@ impl Pattern {
     }
 }
 
-#[derive(Clone, CustomType, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct NamedPattern {
     pub channel: u8,
     pub events: Vec<Event>,
@@ -73,7 +73,7 @@ pub struct NamedPattern {
 }
 
 impl NamedPattern {
-    pub fn named(&self, name: &str) -> NamedPattern {
+    pub fn named(self, name: &str) -> NamedPattern {
         NamedPattern {
             channel: self.channel,
             events: self.events.clone(),
