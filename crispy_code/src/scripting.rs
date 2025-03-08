@@ -41,8 +41,16 @@ mod tests {
     #[test]
     fn test_engine() {
         let engine = setup_engine();
+
+        // Passes a basic pattern
         assert!(matches!(
             engine.eval::<()>(r#"play(notes("[C]").named("polysynth"))"#),
+            Ok(_)
+        ));
+
+        // Won't error even if the dsl is invalid
+        assert!(matches!(
+            engine.eval::<()>(r#"play(notes("C]").named("polysynth"))"#),
             Ok(_)
         ));
     }
