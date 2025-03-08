@@ -40,5 +40,19 @@ This command will allow you to play with rhai code in a REPL.
 More documentation will be available in the future!
 
 ```
-cargo run -p crispy_code --bin repl
+cargo run -p crispy_code --bin crispy-repl
+```
+
+### Run a script
+
+* Install the `crispy-run` tool
+
+```
+cargo install --path crispy_code --bin crispy-run
+```
+
+* Run a script
+
+```
+crispy-run /path/to/script.rhai
 ```

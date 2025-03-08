@@ -2,7 +2,6 @@ use crate::controller::{start_pattern, stop_pattern, Command, Controller};
 use crate::pattern::{NamedPattern, Pattern};
 use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
 use axum::{routing::post, Router};
-use log::debug;
 use nih_plug::prelude::*;
 use reqwest;
 use reqwest::header::CONTENT_TYPE;

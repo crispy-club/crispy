@@ -34,3 +34,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
+
+[[bin]]
+name = "crispy-run"
+path = "src/bin/crispy-run.rs"
