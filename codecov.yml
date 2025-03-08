@@ -1,0 +1,2 @@
+ignore:
+  - "crispy_code/src/bin/*.rs"

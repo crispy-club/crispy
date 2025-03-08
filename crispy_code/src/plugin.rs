@@ -1,10 +1,10 @@
 use crate::controller::{start_pattern, stop_pattern, Command, Controller};
-use crate::dur::Dur;
-use crate::pattern::{
-    NamedPattern, NoteType, Pattern, PreciseEventType, PrecisePattern, SimpleNoteEvent,
-};
+use crate::pattern::{NamedPattern, Pattern};
+use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
 use axum::{routing::post, Router};
 use nih_plug::prelude::*;
+use reqwest;
+use reqwest::header::CONTENT_TYPE;
 use rtrb::{Consumer, PopError, Producer, RingBuffer};
 use std::collections::HashMap;
 use std::error::Error;
@@ -124,10 +124,10 @@ impl Live {
         named_pattern: NamedPattern,
     ) -> Result<(), Box<dyn Error>> {
         let transport = context.transport();
-        let pattern_length = named_pattern.length_bars.or(Some(Dur { num: 1, den: 1 }));
+        let pattern_length = named_pattern.length_bars;
         let precise_pattern = PrecisePattern::from(
             &mut Pattern {
-                channel: Some(named_pattern.channel),
+                channel: named_pattern.channel,
                 length_bars: pattern_length,
                 events: named_pattern.events.clone(),
             },
@@ -138,7 +138,7 @@ impl Live {
         self.patterns.insert(
             named_pattern.name.clone(),
             Pattern {
-                channel: Some(named_pattern.channel),
+                channel: named_pattern.channel,
                 length_bars: pattern_length,
                 events: named_pattern.events.clone(),
             },
@@ -426,4 +426,14 @@ mod tests {
         ));
         Ok(())
     }
+}
+
+pub fn play(pattern: NamedPattern) -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post("http://127.0.0.1:3000/start/foo")
+        .header(CONTENT_TYPE, "application/json")
+        .json(&pattern)
+        .send()?;
+    Ok(())
 }

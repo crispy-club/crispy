@@ -26,19 +26,11 @@ pub async fn start_pattern(
     let mut cmds = controller.commands.lock().unwrap();
     // TODO: handle when the queue is full
 
-    let named_pattern = match pattern.channel {
-        Some(channel) => NamedPattern {
-            channel: channel,
-            name: pattern_name,
-            events: pattern.events,
-            length_bars: pattern.length_bars,
-        },
-        None => NamedPattern {
-            channel: 1,
-            name: pattern_name,
-            events: pattern.events,
-            length_bars: pattern.length_bars,
-        },
+    let named_pattern = NamedPattern {
+        channel: pattern.channel,
+        name: pattern_name,
+        events: pattern.events,
+        length_bars: pattern.length_bars,
     };
     match cmds.push(Command::PatternStart(named_pattern)) {
         Ok(_) => Ok(String::from("ok")),
@@ -82,21 +74,23 @@ mod tests {
         let server = TestServer::new(router).unwrap();
         let response = server
             .post("/start/foo")
+            // Not sure why the whitespace gets messed up by emacs rust-mode for this json structure
             .json(&json!({
-                "events": [
-                     {
-                         "action": {
-                             "NoteEvent": {
-                                 "note_num": 60,
-                                 "velocity": 0.8,
-                                 "dur": {"num": 1, "den": 2},
-                             },
-                         },
-                         "dur": {"num": 1, "den": 1},
-                     },
-                ],
-                "length_bars": {"num": 1, "den": 1},
-            }))
+                    "events": [
+                        {
+                            "action": {
+                                "NoteEvent": {
+                                    "note_num": 60,
+                                    "velocity": 0.8,
+                                    "dur": {"num": 1, "den": 2},
+                                },
+                            },
+                            "dur": {"num": 1, "den": 1},
+                        },
+                    ],
+                    "length_bars": {"num": 1, "den": 1},
+            "channel": 1,
+                }))
             .await;
 
         response.assert_status_ok();
@@ -115,7 +109,7 @@ mod tests {
                     }),
                     dur: Dur { num: 1, den: 1 },
                 },],
-                length_bars: Some(Dur { num: 1, den: 1 }),
+                length_bars: Dur { num: 1, den: 1 },
                 name: String::from("foo"),
             })
         );
@@ -167,7 +161,7 @@ mod tests {
                     }),
                     dur: Dur { num: 1, den: 1 },
                 },],
-                length_bars: Some(Dur { num: 1, den: 1 }),
+                length_bars: Dur { num: 1, den: 1 },
                 name: String::from("foo"),
             })
         );
