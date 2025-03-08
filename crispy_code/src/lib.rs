@@ -6,3 +6,4 @@ pub mod parse;
 pub mod pattern;
 pub mod plugin;
 pub mod precise;
+pub mod scripting;
