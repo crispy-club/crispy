@@ -2,7 +2,7 @@ use crate::dsl::notes;
 use crate::dur::Dur;
 use crate::pattern::NamedPattern;
 use crate::plugin::play;
-use rhai::{Dynamic, Engine, EvalAltResult};
+use rhai::Engine;
 
 pub fn setup_engine() -> Engine {
     let mut engine = Engine::new();
@@ -25,17 +25,11 @@ pub fn setup_engine() -> Engine {
             Ok(pat) => pat,
         }
     });
-    engine.register_fn(
-        "play",
-        |np: NamedPattern| -> Result<(), Box<EvalAltResult>> {
-            play(np).map_err(|e| {
-                Box::new(EvalAltResult::ErrorRuntime(
-                    Dynamic::from(e.to_string()),
-                    rhai::Position::NONE,
-                ))
-            })
-        },
-    );
+    engine.register_fn("play", |np: NamedPattern| {
+        if let Err(err) = play(np) {
+            eprintln!("error playing pattern: {}", err);
+        }
+    });
 
     engine
 }
