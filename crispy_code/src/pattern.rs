@@ -1,4 +1,5 @@
 use crate::dur::Dur;
+use nih_plug::nih_log;
 use num::integer::lcm;
 use rhai::{CustomType, TypeBuilder};
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,7 @@ pub struct Pattern {
 
 impl Pattern {
     pub fn compute_events_lcm(&mut self) -> i64 {
+        nih_log!("computing lcm of events {:?}", self.events.clone());
         let least_common_multiple = self
             .events
             .clone()
@@ -81,6 +83,35 @@ impl NamedPattern {
             name: String::from(name),
         }
     }
+
+    pub fn reverse(self) -> NamedPattern {
+        NamedPattern {
+            channel: self.channel,
+            events: self.events.into_iter().rev().collect(),
+            length_bars: self.length_bars,
+            name: String::from(self.name),
+        }
+    }
+
+    pub fn stretch(self, new_length_bars: Dur) -> NamedPattern {
+        NamedPattern {
+            channel: self.channel,
+            events: events_stretch(self.events, self.length_bars, new_length_bars),
+            length_bars: new_length_bars,
+            name: String::from(self.name),
+        }
+    }
+}
+
+fn events_stretch(events: Vec<Event>, old_length: Dur, new_length: Dur) -> Vec<Event> {
+    let factor = new_length / old_length;
+    events
+        .into_iter()
+        .map(|ev| Event {
+            action: ev.action,
+            dur: ev.dur * factor,
+        })
+        .collect()
 }
 
 #[cfg(test)]

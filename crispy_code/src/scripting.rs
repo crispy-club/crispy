@@ -8,6 +8,10 @@ pub fn setup_engine() -> Engine {
     let mut engine = Engine::new();
 
     engine
+        .register_type_with_name::<Dur>("Dur")
+        .register_fn("dur", |n, d| Dur::new(n, d));
+
+    engine
         .register_type_with_name::<NamedPattern>("NamedPattern")
         .register_fn("named", NamedPattern::named);
 
