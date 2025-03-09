@@ -175,6 +175,14 @@ fn insert_event(
 }
 
 impl PrecisePattern {
+    pub fn start(&mut self) {
+        self.playing = false
+    }
+
+    pub fn stop(&mut self) {
+        self.playing = false
+    }
+
     pub fn from(
         pattern: &mut Pattern,
         sample_rate: f32,

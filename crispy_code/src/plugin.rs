@@ -1,4 +1,6 @@
-use crate::controller::{start_pattern, stop_pattern, Command, Controller};
+use crate::controller::{
+    clear_pattern, clearall, start_pattern, stop_pattern, stopall, Command, Controller,
+};
 use crate::pattern::{NamedPattern, Pattern};
 use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
 use axum::{routing::post, Router};
@@ -109,8 +111,21 @@ impl Live {
                         }
                     }
                 }
-                // TODO: handle this command
-                Ok(Command::PatternList(_)) => Ok(()),
+                Ok(Command::PatternStopAll) => {
+                    for (name, precp) in self.precise_patterns.iter_mut() {
+                        nih_log!("stopping pattern {}", name);
+                        precp.stop();
+                    }
+                    Ok(())
+                }
+                Ok(Command::PatternClear(name)) => {
+                    self.precise_patterns.remove(&name);
+                    Ok(())
+                }
+                Ok(Command::PatternClearAll) => {
+                    self.precise_patterns.drain();
+                    Ok(())
+                }
                 Err(PopError::Empty) => Ok(()),
             }
         } else {
@@ -272,6 +287,9 @@ pub fn create_router(commands: Arc<Controller>) -> Router {
     return Router::new()
         .route("/start/:pattern_name", post(start_pattern))
         .route("/stop/:pattern_name", post(stop_pattern))
+        .route("/stopall", post(stopall))
+        .route("/clear/:pattern_name", post(clear_pattern))
+        .route("/clearall", post(clearall))
         .with_state(commands);
 }
 
