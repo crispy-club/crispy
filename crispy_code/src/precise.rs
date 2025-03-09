@@ -313,6 +313,7 @@ impl PrecisePattern {
         selected_events
     }
 
+    // For any notes that are currently on, will return a NoteOff event.
     pub fn get_notes_playing(&mut self) -> Vec<SimpleNoteEvent> {
         let notes_playing = self
             .notes_playing

@@ -96,22 +96,7 @@ impl Live {
         if let Some(cmds) = self.commands_rx.as_mut() {
             match cmds.pop() {
                 Ok(Command::PatternStart(pattern)) => self.start_pattern(context, pattern),
-                Ok(Command::PatternStop(name)) => {
-                    nih_log!("stopping pattern");
-                    match self.precise_patterns.get(&name) {
-                        Some(precise_pattern) => {
-                            let mut clone = precise_pattern.clone();
-                            clone.playing = false;
-                            self.precise_patterns.insert(name.clone(), clone);
-                            nih_log!("stopped pattern {}", name.clone());
-                            Ok(())
-                        }
-                        None => {
-                            nih_log!("no pattern with name {}", name);
-                            Ok(())
-                        }
-                    }
-                }
+                Ok(Command::PatternStop(name)) => self.stop_pattern(context, &name),
                 Ok(Command::PatternStopAll) => {
                     for (name, precp) in self.precise_patterns.iter_mut() {
                         nih_log!("stopping pattern {}", name);
@@ -174,6 +159,33 @@ impl Live {
             named_pattern.channel
         );
         Ok(())
+    }
+
+    fn stop_pattern(
+        &mut self,
+        context: &mut impl ProcessContext<Self>,
+        name: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        nih_log!("stopping pattern");
+        match self.precise_patterns.get(name) {
+            Some(precise_pattern) => {
+                let mut clone = precise_pattern.clone();
+                clone.playing = false;
+                let prev_pattern = self.precise_patterns.insert(String::from(name), clone);
+                if let Some(mut pattern) = prev_pattern {
+                    let notes_playing = pattern.get_notes_playing();
+                    for nev in notes_playing {
+                        self.send(context, PreciseEventType::Note(nev));
+                    }
+                }
+                nih_log!("stopped pattern {}", name);
+                Ok(())
+            }
+            None => {
+                nih_log!("no pattern with name {}", name);
+                Ok(())
+            }
+        }
     }
 
     fn start(
@@ -450,7 +462,7 @@ mod tests {
 pub fn start(pattern: NamedPattern) -> Result<(), reqwest::Error> {
     let client = reqwest::blocking::Client::new();
     client
-        .post(format!("http://127.0.0.1:3000/loop/{}", pattern.name))
+        .post(format!("http://127.0.0.1:3000/start/{}", pattern.name))
         .header(CONTENT_TYPE, "application/json")
         .json(&pattern)
         .send()?;
