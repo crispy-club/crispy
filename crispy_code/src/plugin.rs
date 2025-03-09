@@ -1,4 +1,7 @@
-use crate::controller::{start_pattern, stop_pattern, Command, Controller};
+use crate::controller::{
+    handler_clear_pattern, handler_clearall, handler_start_pattern, handler_stop_pattern,
+    handler_stopall, Command, Controller,
+};
 use crate::pattern::{NamedPattern, Pattern};
 use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
 use axum::{routing::post, Router};
@@ -109,8 +112,21 @@ impl Live {
                         }
                     }
                 }
-                // TODO: handle this command
-                Ok(Command::PatternList(_)) => Ok(()),
+                Ok(Command::PatternStopAll) => {
+                    for (name, precp) in self.precise_patterns.iter_mut() {
+                        nih_log!("stopping pattern {}", name);
+                        precp.stop();
+                    }
+                    Ok(())
+                }
+                Ok(Command::PatternClear(name)) => {
+                    self.precise_patterns.remove(&name);
+                    Ok(())
+                }
+                Ok(Command::PatternClearAll) => {
+                    self.precise_patterns.drain();
+                    Ok(())
+                }
                 Err(PopError::Empty) => Ok(()),
             }
         } else {
@@ -270,8 +286,11 @@ impl Default for LiveParams {
 
 pub fn create_router(commands: Arc<Controller>) -> Router {
     return Router::new()
-        .route("/start/:pattern_name", post(start_pattern))
-        .route("/stop/:pattern_name", post(stop_pattern))
+        .route("/start/:pattern_name", post(handler_start_pattern))
+        .route("/stop/:pattern_name", post(handler_stop_pattern))
+        .route("/stopall", post(handler_stopall))
+        .route("/clear/:pattern_name", post(handler_clear_pattern))
+        .route("/clearall", post(handler_clearall))
         .with_state(commands);
 }
 
@@ -428,12 +447,50 @@ mod tests {
     }
 }
 
-pub fn play(pattern: NamedPattern) -> Result<(), reqwest::Error> {
+pub fn start(pattern: NamedPattern) -> Result<(), reqwest::Error> {
     let client = reqwest::blocking::Client::new();
     client
-        .post("http://127.0.0.1:3000/start/foo")
+        .post(format!("http://127.0.0.1:3000/loop/{}", pattern.name))
         .header(CONTENT_TYPE, "application/json")
         .json(&pattern)
+        .send()?;
+    Ok(())
+}
+
+pub fn stop(pattern: NamedPattern) -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post(format!("http://127.0.0.1:3000/stop/{}", pattern.name))
+        .header(CONTENT_TYPE, "application/json")
+        .json(&pattern)
+        .send()?;
+    Ok(())
+}
+
+pub fn stopall() -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post("http://127.0.0.1:3000/stopall")
+        .header(CONTENT_TYPE, "application/json")
+        .send()?;
+    Ok(())
+}
+
+pub fn clear(pattern: NamedPattern) -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post(format!("http://127.0.0.1:3000/clear/{}", pattern.name))
+        .header(CONTENT_TYPE, "application/json")
+        .json(&pattern)
+        .send()?;
+    Ok(())
+}
+
+pub fn clearall() -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post("http://127.0.0.1:3000/clearall")
+        .header(CONTENT_TYPE, "application/json")
         .send()?;
     Ok(())
 }

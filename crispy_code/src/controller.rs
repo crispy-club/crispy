@@ -6,9 +6,14 @@ use std::sync::{Arc, Mutex};
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub enum Command {
-    PatternList(Vec<String>),
+    // Would be cool to have this pattern-list feature
+    // once we have events coming out of the plugin.
+    // PatternList(Vec<String>),
     PatternStart(NamedPattern),
     PatternStop(String),
+    PatternStopAll,
+    PatternClear(String),
+    PatternClearAll,
 }
 
 #[allow(dead_code)]
@@ -18,7 +23,7 @@ pub struct Controller {
 }
 
 #[axum::debug_handler]
-pub async fn start_pattern(
+pub async fn handler_start_pattern(
     State(controller): State<Arc<Controller>>,
     Path(pattern_name): Path<String>,
     Json(pattern): Json<Pattern>,
@@ -39,13 +44,50 @@ pub async fn start_pattern(
 }
 
 #[axum::debug_handler]
-pub async fn stop_pattern(
+pub async fn handler_stop_pattern(
     State(controller): State<Arc<Controller>>,
     Path(pattern_name): Path<String>,
 ) -> response::Result<String, StatusCode> {
     let mut cmds = controller.commands.lock().unwrap();
     // TODO: handle when the queue is full
     match cmds.push(Command::PatternStop(pattern_name)) {
+        Ok(_) => Ok(String::from("ok")),
+        Err(_err) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+#[axum::debug_handler]
+pub async fn handler_stopall(
+    State(controller): State<Arc<Controller>>,
+) -> response::Result<String, StatusCode> {
+    let mut cmds = controller.commands.lock().unwrap();
+    // TODO: handle when the queue is full
+    match cmds.push(Command::PatternStopAll) {
+        Ok(_) => Ok(String::from("ok")),
+        Err(_err) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+#[axum::debug_handler]
+pub async fn handler_clear_pattern(
+    State(controller): State<Arc<Controller>>,
+    Path(pattern_name): Path<String>,
+) -> response::Result<String, StatusCode> {
+    let mut cmds = controller.commands.lock().unwrap();
+    // TODO: handle when the queue is full
+    match cmds.push(Command::PatternClear(pattern_name)) {
+        Ok(_) => Ok(String::from("ok")),
+        Err(_err) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+#[axum::debug_handler]
+pub async fn handler_clearall(
+    State(controller): State<Arc<Controller>>,
+) -> response::Result<String, StatusCode> {
+    let mut cmds = controller.commands.lock().unwrap();
+    // TODO: handle when the queue is full
+    match cmds.push(Command::PatternClearAll) {
         Ok(_) => Ok(String::from("ok")),
         Err(_err) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
