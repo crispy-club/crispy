@@ -210,7 +210,7 @@ impl Live {
         match pevt {
             PreciseEventType::Note(nev) => match nev.note_type {
                 NoteType::On => {
-                    nih_log!("note {} played on channel {}", nev.note, nev.channel - 1);
+                    // nih_log!("note {} played on channel {}", nev.note, nev.channel - 1);
                     context.send_event(NoteEvent::NoteOn {
                         timing: nev.timing,
                         voice_id: nev.voice_id,

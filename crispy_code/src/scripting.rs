@@ -13,7 +13,9 @@ pub fn setup_engine() -> Engine {
 
     engine
         .register_type_with_name::<NamedPattern>("NamedPattern")
-        .register_fn("named", NamedPattern::named);
+        .register_fn("named", NamedPattern::named)
+        .register_fn("reverse", NamedPattern::reverse)
+        .register_fn("stretch", NamedPattern::stretch);
 
     engine.register_fn("notes", |expr: &str| -> NamedPattern {
         match notes(expr) {
