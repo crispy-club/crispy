@@ -189,10 +189,23 @@ impl PrecisePattern {
         tempo: f64,
         playing: bool,
     ) -> PrecisePattern {
-        let least_common_multiple = pattern.compute_events_lcm();
         let samples_per_bar = (sample_rate as f64 * (240.0 / tempo)) as i64;
+        if pattern.events.len() == 0 {
+            // HACK: There is some kind of issue happening in the plugin
+            //       where it sometimes wants to play empty patterns when it shouldn't.
+            //       I guess there's also an argument that returning early right here
+            //       actually isn't a hack because this function should be able to
+            //       handle an empty pattern without crashing.
+            return PrecisePattern {
+                events: HashMap::new(),
+                length_samples: samples_per_bar as usize,
+                playing: false,
+                notes_playing: HashMap::new(),
+            };
+        }
         let pattern_length_samples =
             (pattern.length_bars.num * samples_per_bar) / pattern.length_bars.den;
+        let least_common_multiple = pattern.compute_events_lcm();
         let tick_length_samples = pattern_length_samples / least_common_multiple;
         let samples_remainder = pattern_length_samples % least_common_multiple;
         let extra_samples = compute_extra_samples(samples_remainder, pattern.events.len());

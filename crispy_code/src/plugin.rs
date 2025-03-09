@@ -78,6 +78,7 @@ impl Live {
             if let Some(existing_pattern) = self.precise_patterns.get(name) {
                 playing = existing_pattern.playing;
             }
+            nih_log!("recomputing pattern {}", name);
             let precise_pattern = PrecisePattern::from(
                 &mut pattern.clone(),
                 transport.sample_rate,
@@ -126,6 +127,7 @@ impl Live {
     ) -> Result<(), Box<dyn Error>> {
         let transport = context.transport();
         let pattern_length = named_pattern.length_bars;
+        nih_log!("starting pattern {}", named_pattern.name);
         let precise_pattern = PrecisePattern::from(
             &mut Pattern {
                 channel: named_pattern.channel,
@@ -208,7 +210,7 @@ impl Live {
         match pevt {
             PreciseEventType::Note(nev) => match nev.note_type {
                 NoteType::On => {
-                    nih_log!("note {} played on channel {}", nev.note, nev.channel - 1);
+                    // nih_log!("note {} played on channel {}", nev.note, nev.channel - 1);
                     context.send_event(NoteEvent::NoteOn {
                         timing: nev.timing,
                         voice_id: nev.voice_id,
