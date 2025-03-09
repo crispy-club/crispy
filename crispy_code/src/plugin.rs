@@ -450,7 +450,7 @@ mod tests {
 pub fn start(pattern: NamedPattern) -> Result<(), reqwest::Error> {
     let client = reqwest::blocking::Client::new();
     client
-        .post(format!("http://127.0.0.1:3000/loop/{}", pattern.name))
+        .post(format!("http://127.0.0.1:3000/start/{}", pattern.name))
         .header(CONTENT_TYPE, "application/json")
         .json(&pattern)
         .send()?;
