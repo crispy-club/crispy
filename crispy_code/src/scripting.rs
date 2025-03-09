@@ -1,7 +1,7 @@
 use crate::dsl::notes;
 use crate::dur::Dur;
 use crate::pattern::NamedPattern;
-use crate::plugin::play;
+use crate::plugin::{clear, clearall, start, stop, stopall};
 use rhai::Engine;
 
 pub fn setup_engine() -> Engine {
@@ -25,9 +25,29 @@ pub fn setup_engine() -> Engine {
             Ok(pat) => pat,
         }
     });
-    engine.register_fn("play", |np: NamedPattern| {
-        if let Err(err) = play(np) {
-            eprintln!("error playing pattern: {}", err);
+    engine.register_fn("start", |np: NamedPattern| {
+        if let Err(err) = start(np) {
+            eprintln!("error starting pattern: {}", err);
+        }
+    });
+    engine.register_fn("stop", |np: NamedPattern| {
+        if let Err(err) = stop(np) {
+            eprintln!("error stopping pattern: {}", err);
+        }
+    });
+    engine.register_fn("stopall", || {
+        if let Err(err) = stopall() {
+            eprintln!("error stopping all patterns: {}", err);
+        }
+    });
+    engine.register_fn("clear", |np: NamedPattern| {
+        if let Err(err) = clear(np) {
+            eprintln!("error clearing pattern: {}", err);
+        }
+    });
+    engine.register_fn("clearall", || {
+        if let Err(err) = clearall() {
+            eprintln!("error clearing all patterns: {}", err);
         }
     });
 
@@ -44,13 +64,13 @@ mod tests {
 
         // Passes a basic pattern
         assert!(matches!(
-            engine.eval::<()>(r#"play(notes("[C]").named("polysynth"))"#),
+            engine.eval::<()>(r#"start(notes("[C]").named("polysynth"))"#),
             Ok(_)
         ));
 
         // Won't error even if the dsl is invalid
         assert!(matches!(
-            engine.eval::<()>(r#"play(notes("C]").named("polysynth"))"#),
+            engine.eval::<()>(r#"start(notes("C]").named("polysynth"))"#),
             Ok(_)
         ));
     }

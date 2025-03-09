@@ -23,7 +23,7 @@ pub struct Controller {
 }
 
 #[axum::debug_handler]
-pub async fn start_pattern(
+pub async fn handler_start_pattern(
     State(controller): State<Arc<Controller>>,
     Path(pattern_name): Path<String>,
     Json(pattern): Json<Pattern>,
@@ -44,7 +44,7 @@ pub async fn start_pattern(
 }
 
 #[axum::debug_handler]
-pub async fn stop_pattern(
+pub async fn handler_stop_pattern(
     State(controller): State<Arc<Controller>>,
     Path(pattern_name): Path<String>,
 ) -> response::Result<String, StatusCode> {
@@ -57,7 +57,7 @@ pub async fn stop_pattern(
 }
 
 #[axum::debug_handler]
-pub async fn stopall(
+pub async fn handler_stopall(
     State(controller): State<Arc<Controller>>,
 ) -> response::Result<String, StatusCode> {
     let mut cmds = controller.commands.lock().unwrap();
@@ -69,7 +69,7 @@ pub async fn stopall(
 }
 
 #[axum::debug_handler]
-pub async fn clear_pattern(
+pub async fn handler_clear_pattern(
     State(controller): State<Arc<Controller>>,
     Path(pattern_name): Path<String>,
 ) -> response::Result<String, StatusCode> {
@@ -82,7 +82,7 @@ pub async fn clear_pattern(
 }
 
 #[axum::debug_handler]
-pub async fn clearall(
+pub async fn handler_clearall(
     State(controller): State<Arc<Controller>>,
 ) -> response::Result<String, StatusCode> {
     let mut cmds = controller.commands.lock().unwrap();
