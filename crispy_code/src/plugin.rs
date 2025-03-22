@@ -19,6 +19,7 @@ pub struct Live {
     playing: bool,
     patterns: HashMap<String, Pattern>,
     precise_patterns: HashMap<String, PrecisePattern>,
+    future_events: HashMap<usize, Vec<PreciseEventType>>,
 
     // Plugin thread and command thread will communicate using these.
     commands_rx: Option<Consumer<Command>>,
@@ -283,6 +284,7 @@ impl Default for Live {
             // Will be done on the first process() call.
             patterns: HashMap::new(),
             precise_patterns: HashMap::new(),
+            future_events: HashMap::new(),
             commands_rx: None,
             responses_tx: None,
             shutdown_tx: None,
