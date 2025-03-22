@@ -1,6 +1,6 @@
-use crate::controller::{clear, clearall, start, stop, stopall};
 use crate::dsl::notes;
 use crate::dur::Dur;
+use crate::http_commands::{clear, clearall, start, stop, stopall};
 use crate::pattern::NamedPattern;
 use rhai::Engine;
 

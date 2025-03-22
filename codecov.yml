@@ -1,5 +1,10 @@
 ignore:
   - "crispy_code/src/bin/*.rs"
+  # Ignore this for now because
+  # 1. The code is hard to test.
+  # 2. We will eventually rip out all the http stuff when
+  #    we have a functional text editor in place.
+  - "crispy_code/src/http_commands.rs"
 coverage:
   precision: 2
   round: down
