@@ -1,3 +1,4 @@
+use crate::dur::PatternOffsetSamples;
 use crate::pattern::{CtrlEvent, Event, EventType, Note, Pattern};
 use nih_plug::nih_log;
 use serde::Serialize;
@@ -47,7 +48,7 @@ pub enum PreciseEventType {
 
 #[derive(Clone, PartialEq, Serialize)]
 pub struct PrecisePattern {
-    pub events: HashMap<usize, Vec<PreciseEventType>>,
+    pub events: HashMap<PatternOffsetSamples, Vec<PreciseEventType>>,
     pub length_samples: usize,
     pub playing: bool,
     // (channel, note) -> voice_id

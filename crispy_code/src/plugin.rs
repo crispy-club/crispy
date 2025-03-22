@@ -2,6 +2,7 @@ use crate::controller::{
     handler_clear_pattern, handler_clearall, handler_start_pattern, handler_stop_pattern,
     handler_stopall, Command, Controller,
 };
+use crate::dur::SongOffsetSamples;
 use crate::http_commands::HTTP_LISTEN_PORT;
 use crate::pattern::{NamedPattern, Pattern};
 use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
@@ -19,7 +20,7 @@ pub struct Live {
     playing: bool,
     patterns: HashMap<String, Pattern>,
     precise_patterns: HashMap<String, PrecisePattern>,
-    future_events: HashMap<usize, Vec<PreciseEventType>>,
+    future_events: HashMap<SongOffsetSamples, Vec<PreciseEventType>>,
 
     // Plugin thread and command thread will communicate using these.
     commands_rx: Option<Consumer<Command>>,
@@ -53,7 +54,32 @@ impl Live {
         for event in self.get_events(pos_samples, buffer.samples()) {
             self.send(context, event);
         }
+        for (song_pos_samples, events) in self.get_future_events(pos_samples, buffer.samples()) {
+            for event in events {
+                self.send(context, event);
+            }
+            self.future_events.remove(&song_pos_samples);
+        }
         ProcessStatus::Normal
+    }
+
+    fn get_future_events(
+        &mut self,
+        pos_samples: usize,
+        buf_size: usize,
+    ) -> Vec<(usize, Vec<PreciseEventType>)> {
+        self.future_events
+            .iter()
+            .filter(|pair| {
+                let (song_sample_position, _) = pair;
+                **song_sample_position >= pos_samples
+                    && **song_sample_position > pos_samples + buf_size
+            })
+            .map(|pair| {
+                let (song_sample_position, events) = pair;
+                (*song_sample_position, events.clone())
+            })
+            .collect()
     }
 
     fn get_events(&mut self, pos_samples: usize, buf_size: usize) -> Vec<PreciseEventType> {
