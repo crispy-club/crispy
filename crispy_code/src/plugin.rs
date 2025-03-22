@@ -6,8 +6,6 @@ use crate::pattern::{NamedPattern, Pattern};
 use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
 use axum::{routing::post, Router};
 use nih_plug::prelude::*;
-use reqwest;
-use reqwest::header::CONTENT_TYPE;
 use rtrb::{Consumer, PopError, Producer, RingBuffer};
 use std::collections::HashMap;
 use std::error::Error;
@@ -459,52 +457,4 @@ mod tests {
         ));
         Ok(())
     }
-}
-
-pub fn start(pattern: NamedPattern) -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post(format!("http://127.0.0.1:3000/start/{}", pattern.name))
-        .header(CONTENT_TYPE, "application/json")
-        .json(&pattern)
-        .send()?;
-    Ok(())
-}
-
-pub fn stop(pattern: NamedPattern) -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post(format!("http://127.0.0.1:3000/stop/{}", pattern.name))
-        .header(CONTENT_TYPE, "application/json")
-        .json(&pattern)
-        .send()?;
-    Ok(())
-}
-
-pub fn stopall() -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post("http://127.0.0.1:3000/stopall")
-        .header(CONTENT_TYPE, "application/json")
-        .send()?;
-    Ok(())
-}
-
-pub fn clear(pattern: NamedPattern) -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post(format!("http://127.0.0.1:3000/clear/{}", pattern.name))
-        .header(CONTENT_TYPE, "application/json")
-        .json(&pattern)
-        .send()?;
-    Ok(())
-}
-
-pub fn clearall() -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post("http://127.0.0.1:3000/clearall")
-        .header(CONTENT_TYPE, "application/json")
-        .send()?;
-    Ok(())
 }

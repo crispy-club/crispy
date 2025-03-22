@@ -1,6 +1,9 @@
 use crate::dur::Dur;
+use crate::lex::parse_note;
 use nih_plug::nih_log;
 use num::integer::lcm;
+use reqwest;
+use reqwest::header::CONTENT_TYPE;
 use rhai::{CustomType, TypeBuilder};
 use serde::{Deserialize, Serialize};
 
@@ -94,24 +97,120 @@ impl NamedPattern {
     }
 
     pub fn stretch(self, new_length_bars: Dur) -> NamedPattern {
+        let factor = new_length_bars / self.length_bars;
         NamedPattern {
             channel: self.channel,
-            events: events_stretch(self.events, self.length_bars, new_length_bars),
+            events: self
+                .events
+                .into_iter()
+                .map(|ev| Event {
+                    action: ev.action,
+                    dur: ev.dur * factor,
+                })
+                .collect(),
             length_bars: new_length_bars,
             name: String::from(self.name),
         }
     }
+
+    pub fn note(self, expr: &str) -> NamedPattern {
+        match parse_note(expr) {
+            None => {
+                panic!("could not parse note {}", expr);
+            }
+            Some((note, _, _, _)) => NamedPattern {
+                channel: self.channel,
+                events: self
+                    .events
+                    .into_iter()
+                    .map(|ev| Event {
+                        action: match ev.action {
+                            EventType::NoteEvent(existing_note) => EventType::NoteEvent(Note {
+                                note_num: note.note_num,
+                                dur: existing_note.dur,
+                                velocity: existing_note.velocity,
+                            }),
+                            _ => ev.action,
+                        },
+                        dur: ev.dur,
+                    })
+                    .collect(),
+                length_bars: self.length_bars,
+                name: self.name,
+            },
+        }
+    }
+
+    pub fn trans(self, offset: i64) -> NamedPattern {
+        NamedPattern {
+            channel: self.channel,
+            events: self
+                .events
+                .into_iter()
+                .map(|ev| Event {
+                    action: match ev.action {
+                        EventType::NoteEvent(existing_note) => EventType::NoteEvent(Note {
+                            note_num: existing_note.note_num + (offset as u8),
+                            dur: existing_note.dur,
+                            velocity: existing_note.velocity,
+                        }),
+                        _ => ev.action,
+                    },
+                    dur: ev.dur,
+                })
+                .collect(),
+            length_bars: self.length_bars,
+            name: self.name,
+        }
+    }
 }
 
-fn events_stretch(events: Vec<Event>, old_length: Dur, new_length: Dur) -> Vec<Event> {
-    let factor = new_length / old_length;
-    events
-        .into_iter()
-        .map(|ev| Event {
-            action: ev.action,
-            dur: ev.dur * factor,
-        })
-        .collect()
+pub fn start(pattern: NamedPattern) -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post(format!("http://127.0.0.1:3000/start/{}", pattern.name))
+        .header(CONTENT_TYPE, "application/json")
+        .json(&pattern)
+        .send()?;
+    Ok(())
+}
+
+pub fn stop(pattern: NamedPattern) -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post(format!("http://127.0.0.1:3000/stop/{}", pattern.name))
+        .header(CONTENT_TYPE, "application/json")
+        .json(&pattern)
+        .send()?;
+    Ok(())
+}
+
+pub fn stopall() -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post("http://127.0.0.1:3000/stopall")
+        .header(CONTENT_TYPE, "application/json")
+        .send()?;
+    Ok(())
+}
+
+pub fn clear(pattern: NamedPattern) -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post(format!("http://127.0.0.1:3000/clear/{}", pattern.name))
+        .header(CONTENT_TYPE, "application/json")
+        .json(&pattern)
+        .send()?;
+    Ok(())
+}
+
+pub fn clearall() -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post("http://127.0.0.1:3000/clearall")
+        .header(CONTENT_TYPE, "application/json")
+        .send()?;
+    Ok(())
 }
 
 #[cfg(test)]

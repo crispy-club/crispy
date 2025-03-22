@@ -66,7 +66,7 @@ fn parse_note_repeat_grouped(def: &str) -> Option<(Note, u32)> {
     }
 }
 
-fn parse_note(def: &str) -> Option<(Note, u32, u32, u32)> {
+pub fn parse_note(def: &str) -> Option<(Note, u32, u32, u32)> {
     let caps = NOTE_REGEX.captures(def).unwrap();
     assert_eq!(caps.len(), 8);
     let mut note_num = 0;

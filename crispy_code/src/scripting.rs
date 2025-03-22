@@ -1,7 +1,6 @@
 use crate::dsl::notes;
 use crate::dur::Dur;
-use crate::pattern::NamedPattern;
-use crate::plugin::{clear, clearall, start, stop, stopall};
+use crate::pattern::{clear, clearall, start, stop, stopall, NamedPattern};
 use rhai::Engine;
 
 pub fn setup_engine() -> Engine {
@@ -14,8 +13,10 @@ pub fn setup_engine() -> Engine {
     engine
         .register_type_with_name::<NamedPattern>("NamedPattern")
         .register_fn("named", NamedPattern::named)
+        .register_fn("note", NamedPattern::note)
         .register_fn("reverse", NamedPattern::reverse)
-        .register_fn("stretch", NamedPattern::stretch);
+        .register_fn("stretch", NamedPattern::stretch)
+        .register_fn("trans", NamedPattern::trans);
 
     engine.register_fn("notes", |expr: &str| -> NamedPattern {
         match notes(expr) {
