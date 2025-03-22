@@ -1,4 +1,6 @@
 use crate::dur::Dur;
+use crate::lex::parse_note;
+use nih_plug::nih_log;
 use num::integer::lcm;
 use rhai::{CustomType, TypeBuilder};
 use serde::{Deserialize, Serialize};
@@ -39,6 +41,7 @@ pub struct Pattern {
 
 impl Pattern {
     pub fn compute_events_lcm(&mut self) -> i64 {
+        nih_log!("computing lcm of events {:?}", self.events.clone());
         let least_common_multiple = self
             .events
             .clone()
@@ -81,12 +84,90 @@ impl NamedPattern {
             name: String::from(name),
         }
     }
+
+    pub fn reverse(self) -> NamedPattern {
+        NamedPattern {
+            channel: self.channel,
+            events: self.events.into_iter().rev().collect(),
+            length_bars: self.length_bars,
+            name: String::from(self.name),
+        }
+    }
+
+    pub fn len(self, new_length_bars: Dur) -> NamedPattern {
+        let factor = new_length_bars / self.length_bars;
+        NamedPattern {
+            channel: self.channel,
+            events: self
+                .events
+                .into_iter()
+                .map(|ev| Event {
+                    action: ev.action,
+                    dur: ev.dur * factor,
+                })
+                .collect(),
+            length_bars: new_length_bars,
+            name: String::from(self.name),
+        }
+    }
+
+    pub fn note(self, expr: &str) -> NamedPattern {
+        match parse_note(expr) {
+            None => {
+                panic!("could not parse note {}", expr);
+            }
+            Some((note, _, _, _)) => NamedPattern {
+                channel: self.channel,
+                events: self
+                    .events
+                    .into_iter()
+                    .map(|ev| Event {
+                        action: match ev.action {
+                            EventType::NoteEvent(existing_note) => EventType::NoteEvent(Note {
+                                note_num: note.note_num,
+                                dur: existing_note.dur,
+                                velocity: existing_note.velocity,
+                            }),
+                            _ => ev.action,
+                        },
+                        dur: ev.dur,
+                    })
+                    .collect(),
+                length_bars: self.length_bars,
+                name: self.name,
+            },
+        }
+    }
+
+    pub fn trans(self, offset: i64) -> NamedPattern {
+        NamedPattern {
+            channel: self.channel,
+            events: self
+                .events
+                .into_iter()
+                .map(|ev| Event {
+                    action: match ev.action {
+                        EventType::NoteEvent(existing_note) => EventType::NoteEvent(Note {
+                            note_num: existing_note.note_num + (offset as u8),
+                            dur: existing_note.dur,
+                            velocity: existing_note.velocity,
+                        }),
+                        _ => ev.action,
+                    },
+                    dur: ev.dur,
+                })
+                .collect(),
+            length_bars: self.length_bars,
+            name: self.name,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::dur::Dur;
-    use crate::pattern::{Event, EventType, Note};
+    use crate::dsl::notes;
+    use crate::dur::{Dur, BAR, HALF};
+    use crate::pattern::{Event, EventType, NamedPattern, Note};
 
     #[test]
     fn test_note_clone() {
@@ -111,5 +192,65 @@ mod tests {
         };
         let clone = event.clone();
         assert_eq!(event, clone);
+    }
+
+    #[test]
+    fn test_named_pattern_reverse() {
+        assert_eq!(
+            notes("Cx Dg").unwrap().named("foo").reverse(),
+            notes("Dg Cx").unwrap().named("foo")
+        );
+    }
+
+    #[test]
+    fn test_named_pattern_len() {
+        assert_eq!(
+            notes("Cx Dg").unwrap().named("foo").len(BAR * 2),
+            NamedPattern {
+                channel: 1,
+                events: vec![
+                    Event {
+                        action: EventType::NoteEvent(Note {
+                            note_num: 60,
+                            velocity: 0.89,
+                            dur: HALF
+                        }),
+                        dur: BAR,
+                    },
+                    Event {
+                        action: EventType::NoteEvent(Note {
+                            note_num: 62,
+                            velocity: 0.26,
+                            dur: HALF
+                        }),
+                        dur: BAR,
+                    },
+                ],
+                length_bars: BAR * 2,
+                name: String::from("foo"),
+            }
+        );
+    }
+
+    #[test]
+    fn test_named_pattern_note() {
+        assert_eq!(
+            notes("Cx Dg").unwrap().named("foo").note("Ep"),
+            notes("Ex Eg").unwrap().named("foo"),
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_named_pattern_note_failure_case() {
+        notes("Cx Dg").unwrap().note("(((");
+    }
+
+    #[test]
+    fn test_named_pattern_trans() {
+        assert_eq!(
+            notes("Cx Dg").unwrap().named("foo").trans(7),
+            notes("Gx Ag").unwrap().named("foo"),
+        );
     }
 }

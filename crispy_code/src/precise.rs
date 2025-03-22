@@ -1,4 +1,5 @@
 use crate::pattern::{CtrlEvent, Event, EventType, Note, Pattern};
+use nih_plug::nih_log;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
@@ -43,7 +44,7 @@ pub enum PreciseEventType {
     VoiceTerminated(VoiceTerminatedEvent),
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Serialize)]
 pub struct PrecisePattern {
     pub events: HashMap<usize, Vec<PreciseEventType>>,
     pub length_samples: usize,
@@ -189,10 +190,21 @@ impl PrecisePattern {
         tempo: f64,
         playing: bool,
     ) -> PrecisePattern {
-        let least_common_multiple = pattern.compute_events_lcm();
         let samples_per_bar = (sample_rate as f64 * (240.0 / tempo)) as i64;
+        if pattern.events.len() == 0 {
+            // I added this to try to track down a potential bug in the plugin where
+            // it unexpectedly is trying to initialize empty patterns...
+            nih_log!("creating empty pattern that will not play... intentional?");
+            return PrecisePattern {
+                events: HashMap::new(),
+                length_samples: samples_per_bar as usize,
+                playing: false,
+                notes_playing: HashMap::new(),
+            };
+        }
         let pattern_length_samples =
             (pattern.length_bars.num * samples_per_bar) / pattern.length_bars.den;
+        let least_common_multiple = pattern.compute_events_lcm();
         let tick_length_samples = pattern_length_samples / least_common_multiple;
         let samples_remainder = pattern_length_samples % least_common_multiple;
         let extra_samples = compute_extra_samples(samples_remainder, pattern.events.len());
@@ -342,7 +354,7 @@ impl fmt::Debug for PrecisePattern {
 
 #[cfg(test)]
 mod tests {
-    use crate::dur::Dur;
+    use crate::dur::{Dur, BAR};
     use crate::pattern::{CtrlEvent, Event, EventType, Note, Pattern};
     use crate::precise::{
         compute_extra_samples, NoteType, PreciseEventType, PrecisePattern, SimpleCtrlEvent,
@@ -394,6 +406,28 @@ mod tests {
         let extra_samples = compute_extra_samples(37, 5);
         assert_eq!(extra_samples, vec![8, 8, 7, 7, 7]);
         Ok(())
+    }
+
+    #[test]
+    fn test_precise_pattern_empty() {
+        let pat = &mut Pattern {
+            channel: 1,
+            events: vec![],
+            length_bars: BAR,
+        };
+        let sample_rate = 48000 as f32;
+        let tempo_bpm = 120 as f64;
+        let is_playing = true;
+        let ppat = PrecisePattern::from(pat, sample_rate, tempo_bpm, is_playing);
+        assert_eq!(
+            ppat,
+            PrecisePattern {
+                events: HashMap::new(),
+                length_samples: 96000,
+                playing: false, // empty pattern just gets turned off by default
+                notes_playing: HashMap::new(),
+            }
+        );
     }
 
     #[test]

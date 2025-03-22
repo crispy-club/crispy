@@ -1,15 +1,23 @@
 use crate::dsl::notes;
 use crate::dur::Dur;
+use crate::http_commands::{clear, clearall, start, stop, stopall};
 use crate::pattern::NamedPattern;
-use crate::plugin::{clear, clearall, start, stop, stopall};
 use rhai::Engine;
 
 pub fn setup_engine() -> Engine {
     let mut engine = Engine::new();
 
     engine
+        .register_type_with_name::<Dur>("Dur")
+        .register_fn("dur", |n, d| Dur::new(n, d));
+
+    engine
         .register_type_with_name::<NamedPattern>("NamedPattern")
-        .register_fn("named", NamedPattern::named);
+        .register_fn("named", NamedPattern::named)
+        .register_fn("note", NamedPattern::note)
+        .register_fn("reverse", NamedPattern::reverse)
+        .register_fn("len", NamedPattern::len)
+        .register_fn("trans", NamedPattern::trans);
 
     engine.register_fn("notes", |expr: &str| -> NamedPattern {
         match notes(expr) {

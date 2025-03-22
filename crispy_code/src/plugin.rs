@@ -2,12 +2,11 @@ use crate::controller::{
     handler_clear_pattern, handler_clearall, handler_start_pattern, handler_stop_pattern,
     handler_stopall, Command, Controller,
 };
+use crate::http_commands::HTTP_LISTEN_PORT;
 use crate::pattern::{NamedPattern, Pattern};
 use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
 use axum::{routing::post, Router};
 use nih_plug::prelude::*;
-use reqwest;
-use reqwest::header::CONTENT_TYPE;
 use rtrb::{Consumer, PopError, Producer, RingBuffer};
 use std::collections::HashMap;
 use std::error::Error;
@@ -78,6 +77,7 @@ impl Live {
             if let Some(existing_pattern) = self.precise_patterns.get(name) {
                 playing = existing_pattern.playing;
             }
+            nih_log!("recomputing pattern {}", name);
             let precise_pattern = PrecisePattern::from(
                 &mut pattern.clone(),
                 transport.sample_rate,
@@ -126,6 +126,7 @@ impl Live {
     ) -> Result<(), Box<dyn Error>> {
         let transport = context.transport();
         let pattern_length = named_pattern.length_bars;
+        nih_log!("starting pattern {}", named_pattern.name);
         let precise_pattern = PrecisePattern::from(
             &mut Pattern {
                 channel: named_pattern.channel,
@@ -208,7 +209,7 @@ impl Live {
         match pevt {
             PreciseEventType::Note(nev) => match nev.note_type {
                 NoteType::On => {
-                    nih_log!("note {} played on channel {}", nev.note, nev.channel - 1);
+                    // nih_log!("note {} played on channel {}", nev.note, nev.channel - 1);
                     context.send_event(NoteEvent::NoteOn {
                         timing: nev.timing,
                         voice_id: nev.voice_id,
@@ -364,9 +365,10 @@ impl Plugin for Live {
                 .unwrap();
 
             rt.block_on(async move {
-                let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-                    .await
-                    .unwrap();
+                let listener =
+                    tokio::net::TcpListener::bind(format!("127.0.0.1:{}", HTTP_LISTEN_PORT))
+                        .await
+                        .unwrap();
                 axum::serve(listener, router)
                     .with_graceful_shutdown(async move { shutdown_rx.await.ok().unwrap() })
                     .await
@@ -457,52 +459,4 @@ mod tests {
         ));
         Ok(())
     }
-}
-
-pub fn start(pattern: NamedPattern) -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post(format!("http://127.0.0.1:3000/start/{}", pattern.name))
-        .header(CONTENT_TYPE, "application/json")
-        .json(&pattern)
-        .send()?;
-    Ok(())
-}
-
-pub fn stop(pattern: NamedPattern) -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post(format!("http://127.0.0.1:3000/stop/{}", pattern.name))
-        .header(CONTENT_TYPE, "application/json")
-        .json(&pattern)
-        .send()?;
-    Ok(())
-}
-
-pub fn stopall() -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post("http://127.0.0.1:3000/stopall")
-        .header(CONTENT_TYPE, "application/json")
-        .send()?;
-    Ok(())
-}
-
-pub fn clear(pattern: NamedPattern) -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post(format!("http://127.0.0.1:3000/clear/{}", pattern.name))
-        .header(CONTENT_TYPE, "application/json")
-        .json(&pattern)
-        .send()?;
-    Ok(())
-}
-
-pub fn clearall() -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post("http://127.0.0.1:3000/clearall")
-        .header(CONTENT_TYPE, "application/json")
-        .send()?;
-    Ok(())
 }

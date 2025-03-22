@@ -20,8 +20,8 @@ jobs:
         run: |
           rustup component add llvm-tools-preview clippy
           cargo test --package crispy_code
-          cargo install grcov
-          mkdir -p target/coverage
+          cargo clippy
+          cargo install grcov && mkdir -p target/coverage
           grcov . --binary-path ./target/debug/deps/ -s . -t lcov --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/tests.lcov
       - name: Upload coverage reports to Codecov (rust)
         uses: codecov/codecov-action@v5
