@@ -1,6 +1,7 @@
+use crate::controller::{clear, clearall, start, stop, stopall};
 use crate::dsl::notes;
 use crate::dur::Dur;
-use crate::pattern::{clear, clearall, start, stop, stopall, NamedPattern};
+use crate::pattern::NamedPattern;
 use rhai::Engine;
 
 pub fn setup_engine() -> Engine {

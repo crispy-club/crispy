@@ -1,7 +1,10 @@
 use crate::pattern::{NamedPattern, Pattern};
 use axum::{extract::Path, extract::State, http::StatusCode, response, Json};
+use reqwest::header::CONTENT_TYPE;
 use rtrb::{Consumer, Producer};
 use std::sync::{Arc, Mutex};
+
+pub static HTTP_LISTEN_PORT: u16 = 3000;
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
@@ -91,6 +94,63 @@ pub async fn handler_clearall(
         Ok(_) => Ok(String::from("ok")),
         Err(_err) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
+}
+
+pub fn start(pattern: NamedPattern) -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post(format!(
+            "http://127.0.0.1:{}/start/{}",
+            HTTP_LISTEN_PORT, pattern.name
+        ))
+        .header(CONTENT_TYPE, "application/json")
+        .json(&pattern)
+        .send()?;
+    Ok(())
+}
+
+pub fn stop(pattern: NamedPattern) -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post(format!(
+            "http://127.0.0.1:{}/stop/{}",
+            HTTP_LISTEN_PORT, pattern.name
+        ))
+        .header(CONTENT_TYPE, "application/json")
+        .json(&pattern)
+        .send()?;
+    Ok(())
+}
+
+pub fn stopall() -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post(format!("http://127.0.0.1:{}/stopall", HTTP_LISTEN_PORT))
+        .header(CONTENT_TYPE, "application/json")
+        .send()?;
+    Ok(())
+}
+
+pub fn clear(pattern: NamedPattern) -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post(format!(
+            "http://127.0.0.1:3000/{}/{}",
+            HTTP_LISTEN_PORT, pattern.name
+        ))
+        .header(CONTENT_TYPE, "application/json")
+        .json(&pattern)
+        .send()?;
+    Ok(())
+}
+
+pub fn clearall() -> Result<(), reqwest::Error> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post(format!("http://127.0.0.1:{}/clearall", HTTP_LISTEN_PORT))
+        .header(CONTENT_TYPE, "application/json")
+        .send()?;
+    Ok(())
 }
 
 #[cfg(test)]

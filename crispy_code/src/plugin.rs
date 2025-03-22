@@ -1,6 +1,6 @@
 use crate::controller::{
     handler_clear_pattern, handler_clearall, handler_start_pattern, handler_stop_pattern,
-    handler_stopall, Command, Controller,
+    handler_stopall, Command, Controller, HTTP_LISTEN_PORT,
 };
 use crate::pattern::{NamedPattern, Pattern};
 use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
@@ -364,9 +364,10 @@ impl Plugin for Live {
                 .unwrap();
 
             rt.block_on(async move {
-                let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-                    .await
-                    .unwrap();
+                let listener =
+                    tokio::net::TcpListener::bind(format!("127.0.0.1:{}", HTTP_LISTEN_PORT))
+                        .await
+                        .unwrap();
                 axum::serve(listener, router)
                     .with_graceful_shutdown(async move { shutdown_rx.await.ok().unwrap() })
                     .await

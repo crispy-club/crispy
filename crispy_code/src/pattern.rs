@@ -2,8 +2,6 @@ use crate::dur::Dur;
 use crate::lex::parse_note;
 use nih_plug::nih_log;
 use num::integer::lcm;
-use reqwest;
-use reqwest::header::CONTENT_TYPE;
 use rhai::{CustomType, TypeBuilder};
 use serde::{Deserialize, Serialize};
 
@@ -163,54 +161,6 @@ impl NamedPattern {
             name: self.name,
         }
     }
-}
-
-pub fn start(pattern: NamedPattern) -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post(format!("http://127.0.0.1:3000/start/{}", pattern.name))
-        .header(CONTENT_TYPE, "application/json")
-        .json(&pattern)
-        .send()?;
-    Ok(())
-}
-
-pub fn stop(pattern: NamedPattern) -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post(format!("http://127.0.0.1:3000/stop/{}", pattern.name))
-        .header(CONTENT_TYPE, "application/json")
-        .json(&pattern)
-        .send()?;
-    Ok(())
-}
-
-pub fn stopall() -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post("http://127.0.0.1:3000/stopall")
-        .header(CONTENT_TYPE, "application/json")
-        .send()?;
-    Ok(())
-}
-
-pub fn clear(pattern: NamedPattern) -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post(format!("http://127.0.0.1:3000/clear/{}", pattern.name))
-        .header(CONTENT_TYPE, "application/json")
-        .json(&pattern)
-        .send()?;
-    Ok(())
-}
-
-pub fn clearall() -> Result<(), reqwest::Error> {
-    let client = reqwest::blocking::Client::new();
-    client
-        .post("http://127.0.0.1:3000/clearall")
-        .header(CONTENT_TYPE, "application/json")
-        .send()?;
-    Ok(())
 }
 
 #[cfg(test)]
