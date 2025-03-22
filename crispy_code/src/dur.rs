@@ -4,10 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::{Add, Div, Mul, Sub};
 
 pub static BAR: Dur = Dur { num: 1, den: 1 };
-// static HALF: Dur = Dur::new(1, 2);
-// static QUARTER: Dur = Dur::new(1, 4);
-// static EIGHTH: Dur = Dur::new(1, 8);
-// static SIXTEENTH: Dur = Dur::new(1, 16);
+pub static HALF: Dur = Dur { num: 1, den: 2 };
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Dur {
@@ -18,11 +15,11 @@ pub struct Dur {
 impl Dur {
     pub fn new(num: i64, den: i64) -> Self {
         assert_ne!(den, 0);
-        return Dur { num: num, den: den };
+        Dur { num: num, den: den }.reduce()
     }
 
     pub fn recip(self) -> Self {
-        Dur::new(self.den, self.num)
+        Dur::new(self.den, self.num).reduce()
     }
 
     pub fn reduce(self) -> Self {
@@ -34,7 +31,7 @@ impl Dur {
     }
 
     pub fn div_int(self, divisor: i64) -> Self {
-        Dur::new(self.num, self.den * divisor)
+        Dur::new(self.num, self.den * divisor).reduce()
     }
 }
 
@@ -49,6 +46,7 @@ impl Add for Dur {
             (self.num * (mul / self.den)) + (other.num * (mul / other.den)),
             mul,
         )
+        .reduce()
     }
 }
 
@@ -63,6 +61,7 @@ impl Sub for Dur {
             (self.num * (mul / self.den)) - (other.num * (mul / other.den)),
             mul,
         )
+        .reduce()
     }
 }
 
@@ -72,7 +71,16 @@ impl Mul for Dur {
     fn mul(self, other: Self) -> Self {
         assert_ne!(self.den, 0);
         assert_ne!(other.den, 0);
-        Dur::new(self.num * other.num, self.den * other.den)
+        Dur::new(self.num * other.num, self.den * other.den).reduce()
+    }
+}
+
+impl Mul<i32> for Dur {
+    type Output = Self;
+
+    fn mul(self, rhs: i32) -> Self {
+        assert_ne!(self.den, 0);
+        Dur::new(self.num * (rhs as i64), self.den).reduce()
     }
 }
 
@@ -121,7 +129,7 @@ mod tests {
     fn test_dur_mul() {
         let half = Dur::new(1, 2);
         let third = Dur::new(2, 7);
-        assert_eq!(half * third, Dur::new(2, 14));
+        assert_eq!(half * third, Dur::new(1, 7));
     }
 
     #[test]

@@ -96,7 +96,7 @@ impl NamedPattern {
         }
     }
 
-    pub fn stretch(self, new_length_bars: Dur) -> NamedPattern {
+    pub fn len(self, new_length_bars: Dur) -> NamedPattern {
         let factor = new_length_bars / self.length_bars;
         NamedPattern {
             channel: self.channel,
@@ -215,8 +215,9 @@ pub fn clearall() -> Result<(), reqwest::Error> {
 
 #[cfg(test)]
 mod tests {
-    use crate::dur::Dur;
-    use crate::pattern::{Event, EventType, Note};
+    use crate::dsl::notes;
+    use crate::dur::{Dur, BAR, HALF};
+    use crate::pattern::{Event, EventType, NamedPattern, Note};
 
     #[test]
     fn test_note_clone() {
@@ -241,5 +242,65 @@ mod tests {
         };
         let clone = event.clone();
         assert_eq!(event, clone);
+    }
+
+    #[test]
+    fn test_named_pattern_reverse() {
+        assert_eq!(
+            notes("Cx Dg").unwrap().named("foo").reverse(),
+            notes("Dg Cx").unwrap().named("foo")
+        );
+    }
+
+    #[test]
+    fn test_named_pattern_len() {
+        assert_eq!(
+            notes("Cx Dg").unwrap().named("foo").len(BAR * 2),
+            NamedPattern {
+                channel: 1,
+                events: vec![
+                    Event {
+                        action: EventType::NoteEvent(Note {
+                            note_num: 60,
+                            velocity: 0.89,
+                            dur: HALF
+                        }),
+                        dur: BAR,
+                    },
+                    Event {
+                        action: EventType::NoteEvent(Note {
+                            note_num: 62,
+                            velocity: 0.26,
+                            dur: HALF
+                        }),
+                        dur: BAR,
+                    },
+                ],
+                length_bars: BAR * 2,
+                name: String::from("foo"),
+            }
+        );
+    }
+
+    #[test]
+    fn test_named_pattern_note() {
+        assert_eq!(
+            notes("Cx Dg").unwrap().named("foo").note("Ep"),
+            notes("Ex Eg").unwrap().named("foo"),
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_named_pattern_note_failure_case() {
+        notes("Cx Dg").unwrap().note("(((");
+    }
+
+    #[test]
+    fn test_named_pattern_trans() {
+        assert_eq!(
+            notes("Cx Dg").unwrap().named("foo").trans(7),
+            notes("Gx Ag").unwrap().named("foo"),
+        );
     }
 }
