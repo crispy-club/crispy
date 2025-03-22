@@ -52,6 +52,14 @@ impl Live {
             self.recompute_patterns(context);
         }
         for event in self.get_events(pos_samples, buffer.samples()) {
+            if let PreciseEventType::Note(note) = event {
+                match note.note_type {
+                    NoteType::On => {
+                        self.schedule_note_off(note, pos_samples);
+                    }
+                    _ => {}
+                }
+            }
             self.send(context, event);
         }
         for (song_pos_samples, events) in self.get_future_events(pos_samples, buffer.samples()) {
@@ -61,6 +69,34 @@ impl Live {
             self.future_events.remove(&song_pos_samples);
         }
         ProcessStatus::Normal
+    }
+
+    fn schedule_note_off(&mut self, note: SimpleNoteEvent, song_pos_samples: usize) {
+        let offset = song_pos_samples + note.note_length_samples;
+        if let Some(events) = self.future_events.get_mut(&offset) {
+            events.push(PreciseEventType::Note(SimpleNoteEvent {
+                note_type: NoteType::Off,
+                timing: 0, // TBD when we actually send the note-off
+                voice_id: note.voice_id,
+                channel: note.channel,
+                note: note.note,
+                velocity: 0.0,
+                note_length_samples: 0 as usize,
+            }));
+        } else {
+            self.future_events.insert(
+                offset,
+                vec![PreciseEventType::Note(SimpleNoteEvent {
+                    note_type: NoteType::Off,
+                    timing: 0, // TBD when we actually send the note-off
+                    voice_id: note.voice_id,
+                    channel: note.channel,
+                    note: note.note,
+                    velocity: 0.0,
+                    note_length_samples: 0 as usize,
+                })],
+            );
+        }
     }
 
     fn get_future_events(
@@ -172,15 +208,8 @@ impl Live {
                 events: named_pattern.events.clone(),
             },
         );
-        let prev_pattern = self
-            .precise_patterns
+        self.precise_patterns
             .insert(named_pattern.name.clone(), precise_pattern.clone());
-        if let Some(mut pattern) = prev_pattern {
-            let notes_playing = pattern.get_notes_playing();
-            notes_playing.into_iter().for_each(|nev| {
-                self.send(context, PreciseEventType::Note(nev));
-            });
-        }
         nih_log!(
             "started pattern {} on channel {}",
             named_pattern.name,
