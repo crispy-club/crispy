@@ -1,57 +1,215 @@
-use crate::controller::{
-    handler_clear_pattern, handler_clearall, handler_start_pattern, handler_stop_pattern,
-    handler_stopall, Command, Controller,
-};
+use crate::controller::{create_router, Command, Controller};
 use crate::dur::SongOffsetSamples;
 use crate::http_commands::HTTP_LISTEN_PORT;
 use crate::pattern::{NamedPattern, Pattern};
 use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
-use axum::{routing::post, Router};
 use nih_plug::prelude::*;
-use rtrb::{Consumer, PopError, Producer, RingBuffer};
+use rtrb::{Consumer, PopError, RingBuffer};
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::sync::oneshot;
 
-pub struct Live {
-    params: Arc<LiveParams>,
-    playing: bool,
+#[derive(Params)]
+pub struct CodeParams {}
+
+impl Default for CodeParams {
+    fn default() -> Self {
+        Self {}
+    }
+}
+
+pub struct Code {
+    // Plugin thread and command thread will communicate using these.
+    pub commands_rx: Option<Consumer<Command>>,
+    pub shutdown_tx: Option<oneshot::Sender<()>>,
+    pub params: Arc<CodeParams>,
+    pub playing: bool,
+
     patterns: HashMap<String, Pattern>,
     precise_patterns: HashMap<String, PrecisePattern>,
     future_events: HashMap<SongOffsetSamples, Vec<PreciseEventType>>,
 
-    // Plugin thread and command thread will communicate using these.
-    commands_rx: Option<Consumer<Command>>,
-    responses_tx: Option<Producer<Command>>,
-
     // Command thread will be shutdown by the plugin thread using this.
-    shutdown_tx: Option<oneshot::Sender<()>>,
-
-    tempo_prev_cycle: Option<f64>,
+    tempo_prev_cycle: f64,
 }
 
-impl Live {
-    fn play(
+impl Default for Code {
+    fn default() -> Self {
+        Self {
+            params: Arc::new(CodeParams::default()),
+            playing: false,
+            // We need the tempo and sample rate to properly initialize this.
+            // Will be done on the first process() call.
+            patterns: HashMap::new(),
+            precise_patterns: HashMap::new(),
+            future_events: HashMap::new(),
+            commands_rx: None,
+            shutdown_tx: None,
+            tempo_prev_cycle: 0.0 as f64,
+        }
+    }
+}
+
+pub trait Context<P: Plugin> {
+    fn playing(&self) -> bool;
+    fn pos_samples(&self) -> Option<i64>;
+    fn sample_rate(&self) -> f32;
+    fn tempo(&self) -> f64;
+    fn send_event(&mut self, event: PluginNoteEvent<P>);
+}
+
+impl<P: Plugin, T: ProcessContext<P>> Context<P> for T {
+    fn playing(&self) -> bool {
+        self.transport().playing
+    }
+
+    fn pos_samples(&self) -> Option<i64> {
+        self.transport().pos_samples()
+    }
+
+    fn sample_rate(&self) -> f32 {
+        self.transport().sample_rate
+    }
+
+    fn tempo(&self) -> f64 {
+        self.transport().tempo.unwrap_or(120.0 as f64)
+    }
+
+    fn send_event(&mut self, event: PluginNoteEvent<P>) {
+        ProcessContext::send_event(self, event)
+    }
+}
+
+impl Plugin for Code {
+    const NAME: &'static str = "CODE";
+    const VENDOR: &'static str = "Brian Sorahan";
+    const URL: &'static str = "https://crispy.club";
+    const EMAIL: &'static str = "info@example.com";
+
+    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
+        AudioIOLayout {
+            // This is also the default and can be omitted here
+            main_input_channels: None,
+            main_output_channels: None,
+            ..AudioIOLayout::const_default()
+        },
+        AudioIOLayout {
+            main_input_channels: None,
+            main_output_channels: None,
+            ..AudioIOLayout::const_default()
+        },
+    ];
+
+    const MIDI_OUTPUT: MidiConfig = MidiConfig::Basic;
+    const SAMPLE_ACCURATE_AUTOMATION: bool = true;
+
+    type SysExMessage = ();
+    type BackgroundTask = ();
+
+    fn params(&self) -> Arc<dyn Params> {
+        self.params.clone()
+    }
+
+    fn initialize(
+        &mut self,
+        _audio_io_layout: &AudioIOLayout,
+        _buffer_config: &BufferConfig,
+        _context: &mut impl InitContext<Self>,
+    ) -> bool {
+        let (commands_tx, commands_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let commands = Arc::new(Controller {
+            commands_tx: Mutex::new(commands_tx),
+        });
+        self.shutdown_tx = Some(shutdown_tx);
+        self.commands_rx = Some(commands_rx);
+
+        thread::spawn(move || {
+            let router = create_router(commands);
+
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+
+            rt.block_on(async move {
+                let listener =
+                    tokio::net::TcpListener::bind(format!("127.0.0.1:{}", HTTP_LISTEN_PORT))
+                        .await
+                        .unwrap();
+                axum::serve(listener, router)
+                    .with_graceful_shutdown(async move { shutdown_rx.await.ok().unwrap() })
+                    .await
+                    .unwrap();
+            });
+        });
+        true
+    }
+
+    fn process(
         &mut self,
         buffer: &mut Buffer,
+        _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        let transport = context.transport();
-        let pos_samples = transport.pos_samples().unwrap_or(0) as usize;
+        let buf_size = buffer.samples();
+        self.cycle(buf_size, context)
+    }
 
-        if let Err(_) = self.process_commands(context) {
+    fn deactivate(&mut self) -> () {
+        nih_log!("shutting down http thread...");
+        if let Some(sender) = self.shutdown_tx.take() {
+            sender.send(()).expect("Failed to send shutdown signal");
+        }
+    }
+}
+
+impl Code {
+    fn cycle(&mut self, buf_size: usize, ctx: &mut impl Context<Self>) -> ProcessStatus {
+        let tempo = ctx.tempo();
+
+        if ctx.playing() {
+            if !self.playing {
+                self.start(buf_size, ctx);
+            } else {
+                self.play(buf_size, ctx);
+            }
+        } else {
+            if self.playing {
+                self.stop(ctx);
+            }
+        }
+        self.tempo_prev_cycle = tempo;
+
+        ProcessStatus::Normal
+    }
+
+    fn start(&mut self, buf_size: usize, ctx: &mut impl Context<Self>) -> ProcessStatus {
+        self.playing = true;
+        nih_log!(
+            "starting CODE (sample rate {}) (tempo {})",
+            ctx.sample_rate(),
+            ctx.tempo(),
+        );
+        self.play(buf_size, ctx)
+    }
+
+    fn play(&mut self, buf_size: usize, ctx: &mut impl Context<Self>) -> ProcessStatus {
+        let pos_samples = ctx.pos_samples().unwrap_or(0) as usize;
+        if let Err(_) = self.process_commands(ctx) {
             return ProcessStatus::Error("error processing commands");
         }
-        let transport = context.transport();
-        let tempo = transport.tempo.unwrap_or(120.0);
+        let tempo = ctx.tempo();
 
-        if tempo != self.tempo_prev_cycle.unwrap_or(120.0) {
+        if tempo != self.tempo_prev_cycle {
             nih_log!("recomputing patterns after tempo change");
-            self.recompute_patterns(context);
+            self.recompute_patterns(ctx);
         }
-        for event in self.get_events(pos_samples, buffer.samples()) {
+        for event in self.get_events(pos_samples, buf_size) {
             if let PreciseEventType::Note(note) = event {
                 match note.note_type {
                     NoteType::On => {
@@ -60,14 +218,21 @@ impl Live {
                     _ => {}
                 }
             }
-            self.send(context, event);
+            self.send(ctx, event);
         }
-        for (song_pos_samples, events) in self.get_future_events(pos_samples, buffer.samples()) {
+        for (song_pos_samples, events) in self.get_future_events(pos_samples, buf_size) {
             for event in events {
-                self.send(context, event);
+                self.send(ctx, event);
             }
             self.future_events.remove(&song_pos_samples);
         }
+        ProcessStatus::Normal
+    }
+
+    fn stop(&mut self, ctx: &mut impl Context<Self>) -> ProcessStatus {
+        self.playing = false;
+        nih_log!("turning all notes off");
+        self.turn_all_notes_off(ctx);
         ProcessStatus::Normal
     }
 
@@ -132,9 +297,7 @@ impl Live {
             .collect();
     }
 
-    fn recompute_patterns(&mut self, context: &mut impl ProcessContext<Self>) {
-        let transport = context.transport();
-
+    fn recompute_patterns(&mut self, ctx: &mut impl Context<Self>) {
         for (name, pattern) in self.patterns.iter() {
             let mut playing = false;
             if let Some(existing_pattern) = self.precise_patterns.get(name) {
@@ -143,8 +306,8 @@ impl Live {
             nih_log!("recomputing pattern {}", name);
             let precise_pattern = PrecisePattern::from(
                 &mut pattern.clone(),
-                transport.sample_rate,
-                transport.tempo.unwrap_or(120.0),
+                ctx.sample_rate(),
+                ctx.tempo(),
                 playing,
             );
             self.precise_patterns
@@ -152,14 +315,11 @@ impl Live {
         }
     }
 
-    fn process_commands(
-        &mut self,
-        context: &mut impl ProcessContext<Self>,
-    ) -> Result<(), Box<dyn Error>> {
+    fn process_commands(&mut self, ctx: &mut impl Context<Self>) -> Result<(), Box<dyn Error>> {
         if let Some(cmds) = self.commands_rx.as_mut() {
             match cmds.pop() {
-                Ok(Command::PatternStart(pattern)) => self.start_pattern(context, pattern),
-                Ok(Command::PatternStop(name)) => self.stop_pattern(context, &name),
+                Ok(Command::PatternStart(pattern)) => self.start_pattern(ctx, pattern),
+                Ok(Command::PatternStop(name)) => self.stop_pattern(ctx, &name),
                 Ok(Command::PatternStopAll) => {
                     for (name, precp) in self.precise_patterns.iter_mut() {
                         nih_log!("stopping pattern {}", name);
@@ -184,10 +344,9 @@ impl Live {
 
     fn start_pattern(
         &mut self,
-        context: &mut impl ProcessContext<Self>,
+        ctx: &mut impl Context<Self>,
         named_pattern: NamedPattern,
     ) -> Result<(), Box<dyn Error>> {
-        let transport = context.transport();
         let pattern_length = named_pattern.length_bars;
         nih_log!("starting pattern {}", named_pattern.name);
         let precise_pattern = PrecisePattern::from(
@@ -196,8 +355,8 @@ impl Live {
                 length_bars: pattern_length,
                 events: named_pattern.events.clone(),
             },
-            transport.sample_rate,
-            transport.tempo.unwrap_or(120.0),
+            ctx.sample_rate(),
+            ctx.tempo(),
             true,
         );
         self.patterns.insert(
@@ -220,7 +379,7 @@ impl Live {
 
     fn stop_pattern(
         &mut self,
-        context: &mut impl ProcessContext<Self>,
+        ctx: &mut impl Context<Self>,
         name: &str,
     ) -> Result<(), Box<dyn Error>> {
         nih_log!("stopping pattern");
@@ -232,7 +391,7 @@ impl Live {
                 if let Some(mut pattern) = prev_pattern {
                     let notes_playing = pattern.get_notes_playing();
                     for nev in notes_playing {
-                        self.send(context, PreciseEventType::Note(nev));
+                        self.send(ctx, PreciseEventType::Note(nev));
                     }
                 }
                 nih_log!("stopped pattern {}", name);
@@ -245,28 +404,12 @@ impl Live {
         }
     }
 
-    fn start(
-        &mut self,
-        buffer: &mut Buffer,
-        context: &mut impl ProcessContext<Self>,
-    ) -> ProcessStatus {
-        let transport = context.transport();
-        self.playing = true;
-        nih_log!(
-            "starting live (sample rate {}) (tempo {})",
-            transport.sample_rate,
-            transport.tempo.unwrap_or(120.0),
-        );
-        self.play(buffer, context);
-        return ProcessStatus::Normal;
-    }
-
-    fn send(&self, context: &mut impl ProcessContext<Self>, pevt: PreciseEventType) -> () {
+    fn send(&self, ctx: &mut impl Context<Self>, pevt: PreciseEventType) -> () {
         match pevt {
             PreciseEventType::Note(nev) => match nev.note_type {
                 NoteType::On => {
                     // nih_log!("note {} played on channel {}", nev.note, nev.channel - 1);
-                    context.send_event(NoteEvent::NoteOn {
+                    ctx.send_event(NoteEvent::NoteOn {
                         timing: nev.timing,
                         voice_id: nev.voice_id,
                         channel: nev.channel - 1,
@@ -274,7 +417,7 @@ impl Live {
                         velocity: nev.velocity,
                     })
                 }
-                NoteType::Off => context.send_event(NoteEvent::NoteOff {
+                NoteType::Off => ctx.send_event(NoteEvent::NoteOff {
                     timing: nev.timing,
                     voice_id: nev.voice_id,
                     channel: nev.channel - 1,
@@ -284,7 +427,7 @@ impl Live {
                 NoteType::Rest => {}
             },
             PreciseEventType::Ctrl(cev) => {
-                context.send_event(NoteEvent::MidiCC {
+                ctx.send_event(NoteEvent::MidiCC {
                     timing: cev.timing,
                     channel: cev.channel - 1,
                     cc: cev.cc,
@@ -292,7 +435,7 @@ impl Live {
                 });
             }
             PreciseEventType::VoiceTerminated(vt) => {
-                context.send_event(NoteEvent::VoiceTerminated {
+                ctx.send_event(NoteEvent::VoiceTerminated {
                     timing: vt.timing,
                     channel: vt.channel - 1,
                     voice_id: vt.voice_id,
@@ -302,18 +445,7 @@ impl Live {
         }
     }
 
-    fn stop(
-        &mut self,
-        _buffer: &mut Buffer,
-        context: &mut impl ProcessContext<Self>,
-    ) -> ProcessStatus {
-        self.playing = false;
-        nih_log!("turning all notes off");
-        self.turn_all_notes_off(context);
-        return ProcessStatus::Normal;
-    }
-
-    fn turn_all_notes_off(&mut self, context: &mut impl ProcessContext<Self>) -> () {
+    fn turn_all_notes_off(&mut self, ctx: &mut impl Context<Self>) -> () {
         for event in self
             .precise_patterns
             .values_mut()
@@ -322,153 +454,12 @@ impl Live {
             .flatten()
             .collect::<Vec<SimpleNoteEvent>>()
         {
-            self.send(context, PreciseEventType::Note(event));
+            self.send(ctx, PreciseEventType::Note(event));
         }
     }
 }
 
-#[derive(Params)]
-struct LiveParams {}
-
-impl Default for Live {
-    fn default() -> Self {
-        Self {
-            params: Arc::new(LiveParams::default()),
-            playing: false,
-            // We need the tempo and sample rate to properly initialize this.
-            // Will be done on the first process() call.
-            patterns: HashMap::new(),
-            precise_patterns: HashMap::new(),
-            future_events: HashMap::new(),
-            commands_rx: None,
-            responses_tx: None,
-            shutdown_tx: None,
-            tempo_prev_cycle: None,
-        }
-    }
-}
-
-impl Default for LiveParams {
-    fn default() -> Self {
-        Self {}
-    }
-}
-
-pub fn create_router(commands: Arc<Controller>) -> Router {
-    return Router::new()
-        .route("/start/:pattern_name", post(handler_start_pattern))
-        .route("/stop/:pattern_name", post(handler_stop_pattern))
-        .route("/stopall", post(handler_stopall))
-        .route("/clear/:pattern_name", post(handler_clear_pattern))
-        .route("/clearall", post(handler_clearall))
-        .with_state(commands);
-}
-
-impl Plugin for Live {
-    const NAME: &'static str = "CODE";
-    const VENDOR: &'static str = "Brian Sorahan";
-    const URL: &'static str = "https://crispy.club";
-    const EMAIL: &'static str = "info@example.com";
-
-    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-
-    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
-        AudioIOLayout {
-            // This is also the default and can be omitted here
-            main_input_channels: None,
-            main_output_channels: None,
-            ..AudioIOLayout::const_default()
-        },
-        AudioIOLayout {
-            main_input_channels: None,
-            main_output_channels: None,
-            ..AudioIOLayout::const_default()
-        },
-    ];
-
-    const MIDI_OUTPUT: MidiConfig = MidiConfig::Basic;
-    const SAMPLE_ACCURATE_AUTOMATION: bool = true;
-
-    type SysExMessage = ();
-    type BackgroundTask = ();
-
-    fn params(&self) -> Arc<dyn Params> {
-        self.params.clone()
-    }
-
-    fn initialize(
-        &mut self,
-        _audio_io_layout: &AudioIOLayout,
-        _buffer_config: &BufferConfig,
-        _context: &mut impl InitContext<Self>,
-    ) -> bool {
-        let (commands_tx, commands_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
-        let (responses_tx, responses_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
-        let (shutdown_tx, shutdown_rx) = oneshot::channel();
-        let commands = Arc::new(Controller {
-            commands: Mutex::new(commands_tx),
-            responses: Mutex::new(responses_rx),
-        });
-        self.shutdown_tx = Some(shutdown_tx);
-        self.commands_rx = Some(commands_rx);
-        self.responses_tx = Some(responses_tx);
-
-        thread::spawn(move || {
-            let router = create_router(commands);
-
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap();
-
-            rt.block_on(async move {
-                let listener =
-                    tokio::net::TcpListener::bind(format!("127.0.0.1:{}", HTTP_LISTEN_PORT))
-                        .await
-                        .unwrap();
-                axum::serve(listener, router)
-                    .with_graceful_shutdown(async move { shutdown_rx.await.ok().unwrap() })
-                    .await
-                    .unwrap();
-            });
-        });
-        true
-    }
-
-    fn process(
-        &mut self,
-        buffer: &mut Buffer,
-        _aux: &mut AuxiliaryBuffers,
-        context: &mut impl ProcessContext<Self>,
-    ) -> ProcessStatus {
-        let transport = context.transport();
-        let tempo = Some(transport.tempo.unwrap_or(120.0));
-
-        if transport.playing {
-            if !self.playing {
-                self.start(buffer, context);
-            } else {
-                self.play(buffer, context);
-            }
-        } else {
-            if self.playing {
-                self.stop(buffer, context);
-            }
-        }
-        self.tempo_prev_cycle = tempo;
-
-        ProcessStatus::Normal
-    }
-
-    fn deactivate(&mut self) -> () {
-        nih_log!("shutting down http thread...");
-        if let Some(sender) = self.shutdown_tx.take() {
-            sender.send(()).expect("Failed to send shutdown signal");
-        }
-    }
-}
-
-impl ClapPlugin for Live {
+impl ClapPlugin for Code {
     const CLAP_ID: &'static str = "club.crispy";
     const CLAP_DESCRIPTION: Option<&'static str> =
         Some("MIDI sequencing via code that is edited on the fly");
@@ -477,17 +468,17 @@ impl ClapPlugin for Live {
     const CLAP_FEATURES: &'static [ClapFeature] = &[ClapFeature::NoteEffect, ClapFeature::Utility];
 }
 
-impl Vst3Plugin for Live {
+impl Vst3Plugin for Code {
     const VST3_CLASS_ID: [u8; 16] = *b"XXXXXXXXXXXXXXXX";
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[Vst3SubCategory::Tools];
 }
 
-nih_export_clap!(Live);
-nih_export_vst3!(Live);
+nih_export_clap!(Code);
+nih_export_vst3!(Code);
 
 #[cfg(test)]
 mod tests {
-    use crate::plugin::Live;
+    use crate::plugin::Code;
     use nih_plug::prelude::*;
 
     struct FakeInitContext;
@@ -503,7 +494,7 @@ mod tests {
 
     #[test]
     fn test_plugin_initialize() -> Result<(), String> {
-        let mut plugin: Live = Default::default();
+        let mut plugin: Code = Default::default();
         assert!(plugin.initialize(
             &AudioIOLayout::default(),
             &BufferConfig {
