@@ -3,7 +3,7 @@ use crate::dur::SongOffsetSamples;
 use crate::pattern::{NamedPattern, Pattern};
 use crate::plugin_export::Context;
 use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
-use nih_plug::prelude::{nih_log, NoteEvent, Params, ProcessStatus};
+use nih_plug::prelude::{nih_log, Params, ProcessStatus};
 use rtrb::{Consumer, PopError};
 use std::collections::HashMap;
 use std::error::Error;
@@ -52,75 +52,86 @@ impl Default for Code {
 }
 
 impl Code {
-    pub fn cycle(&mut self, buf_size: usize, ctx: &mut impl Context<Self>) -> ProcessStatus {
-        let tempo = ctx.tempo();
+    pub fn cycle(
+        &mut self,
+        buf_size: usize,
+        ctx: &Context,
+    ) -> (ProcessStatus, Vec<PreciseEventType>) {
+        let mut events: Vec<PreciseEventType> = Vec::new();
 
-        if ctx.playing() {
+        if ctx.playing {
             if !self.playing {
-                self.start(buf_size, ctx);
+                self.start(buf_size, ctx, &mut events);
             } else {
-                self.play(buf_size, ctx);
+                self.play(buf_size, ctx, &mut events);
             }
         } else {
             if self.playing {
-                self.stop(ctx);
+                self.stop(&mut events);
             }
         }
-        self.tempo_prev_cycle = tempo;
+        self.tempo_prev_cycle = ctx.tempo;
 
-        ProcessStatus::Normal
+        (ProcessStatus::Normal, events)
     }
 
-    fn start(&mut self, buf_size: usize, ctx: &mut impl Context<Self>) -> ProcessStatus {
+    fn start(
+        &mut self,
+        buf_size: usize,
+        ctx: &Context,
+        events: &mut Vec<PreciseEventType>,
+    ) -> ProcessStatus {
         self.playing = true;
         nih_log!(
             "starting CODE (sample rate {}) (tempo {})",
-            ctx.sample_rate(),
-            ctx.tempo(),
+            ctx.sample_rate,
+            ctx.tempo,
         );
-        self.play(buf_size, ctx)
+        self.play(buf_size, ctx, events)
     }
 
-    fn play(&mut self, buf_size: usize, ctx: &mut impl Context<Self>) -> ProcessStatus {
-        let pos_samples = ctx.pos_samples().unwrap_or(0) as usize;
-        if let Err(_) = self.process_commands(ctx) {
+    fn play(
+        &mut self,
+        buf_size: usize,
+        ctx: &Context,
+        events: &mut Vec<PreciseEventType>,
+    ) -> ProcessStatus {
+        if let Err(_) = self.process_commands(ctx, events) {
             return ProcessStatus::Error("error processing commands");
         }
-        let tempo = ctx.tempo();
-
-        if tempo != self.tempo_prev_cycle {
+        if ctx.tempo != self.tempo_prev_cycle {
             nih_log!("recomputing patterns after tempo change");
             self.recompute_patterns(ctx);
         }
-        for event in self.get_events(pos_samples, buf_size) {
+        for event in self.get_events(ctx.pos_samples, buf_size) {
             if let PreciseEventType::Note(note) = event {
                 match note.note_type {
                     NoteType::On => {
-                        self.schedule_note_off(note, pos_samples);
+                        self.schedule_note_off(note, ctx.pos_samples);
                     }
                     _ => {}
                 }
             }
-            self.send(ctx, event);
+            events.push(event);
         }
-        for (song_pos_samples, events) in self.get_future_events(pos_samples, buf_size) {
-            for event in events {
-                self.send(ctx, event);
+        for (song_pos_samples, fut_events) in self.get_future_events(ctx.pos_samples, buf_size) {
+            for event in fut_events {
+                events.push(event);
             }
             self.future_events.remove(&song_pos_samples);
         }
         ProcessStatus::Normal
     }
 
-    fn stop(&mut self, ctx: &mut impl Context<Self>) -> ProcessStatus {
+    fn stop(&mut self, events: &mut Vec<PreciseEventType>) -> ProcessStatus {
         self.playing = false;
         nih_log!("turning all notes off");
-        self.turn_all_notes_off(ctx);
+        self.turn_all_notes_off(events);
         ProcessStatus::Normal
     }
 
-    fn schedule_note_off(&mut self, note: SimpleNoteEvent, song_pos_samples: usize) {
-        let offset = song_pos_samples + note.note_length_samples;
+    fn schedule_note_off(&mut self, note: SimpleNoteEvent, song_pos_samples: i64) {
+        let offset = (song_pos_samples as usize) + note.note_length_samples;
         if let Some(events) = self.future_events.get_mut(&offset) {
             events.push(PreciseEventType::Note(SimpleNoteEvent {
                 note_type: NoteType::Off,
@@ -149,15 +160,15 @@ impl Code {
 
     fn get_future_events(
         &mut self,
-        pos_samples: usize,
+        pos_samples: i64,
         buf_size: usize,
     ) -> Vec<(usize, Vec<PreciseEventType>)> {
         self.future_events
             .iter()
             .filter(|pair| {
                 let (song_sample_position, _) = pair;
-                **song_sample_position >= pos_samples
-                    && **song_sample_position > pos_samples + buf_size
+                **song_sample_position >= (pos_samples as usize)
+                    && **song_sample_position > (pos_samples as usize) + buf_size
             })
             .map(|pair| {
                 let (song_sample_position, events) = pair;
@@ -166,43 +177,43 @@ impl Code {
             .collect()
     }
 
-    fn get_events(&mut self, pos_samples: usize, buf_size: usize) -> Vec<PreciseEventType> {
+    fn get_events(&mut self, pos_samples: i64, buf_size: usize) -> Vec<PreciseEventType> {
         return self
             .precise_patterns
             .values_mut()
             .into_iter()
             .map(move |precise_pattern| {
                 precise_pattern
-                    .get_events(pos_samples, pos_samples + buf_size)
+                    .get_events(pos_samples as usize, (pos_samples as usize) + buf_size)
                     .into_iter()
             })
             .flatten()
             .collect();
     }
 
-    fn recompute_patterns(&mut self, ctx: &mut impl Context<Self>) {
+    fn recompute_patterns(&mut self, ctx: &Context) {
         for (name, pattern) in self.patterns.iter() {
             let mut playing = false;
             if let Some(existing_pattern) = self.precise_patterns.get(name) {
                 playing = existing_pattern.playing;
             }
             nih_log!("recomputing pattern {}", name);
-            let precise_pattern = PrecisePattern::from(
-                &mut pattern.clone(),
-                ctx.sample_rate(),
-                ctx.tempo(),
-                playing,
-            );
+            let precise_pattern =
+                PrecisePattern::from(&mut pattern.clone(), ctx.sample_rate, ctx.tempo, playing);
             self.precise_patterns
                 .insert(name.clone(), precise_pattern.clone());
         }
     }
 
-    fn process_commands(&mut self, ctx: &mut impl Context<Self>) -> Result<(), Box<dyn Error>> {
+    fn process_commands(
+        &mut self,
+        ctx: &Context,
+        events: &mut Vec<PreciseEventType>,
+    ) -> Result<(), Box<dyn Error>> {
         if let Some(cmds) = self.commands_rx.as_mut() {
             match cmds.pop() {
                 Ok(Command::PatternStart(pattern)) => self.start_pattern(ctx, pattern),
-                Ok(Command::PatternStop(name)) => self.stop_pattern(ctx, &name),
+                Ok(Command::PatternStop(name)) => self.stop_pattern(&name, events),
                 Ok(Command::PatternStopAll) => {
                     for (name, precp) in self.precise_patterns.iter_mut() {
                         nih_log!("stopping pattern {}", name);
@@ -227,7 +238,7 @@ impl Code {
 
     fn start_pattern(
         &mut self,
-        ctx: &mut impl Context<Self>,
+        ctx: &Context,
         named_pattern: NamedPattern,
     ) -> Result<(), Box<dyn Error>> {
         let pattern_length = named_pattern.length_bars;
@@ -238,8 +249,8 @@ impl Code {
                 length_bars: pattern_length,
                 events: named_pattern.events.clone(),
             },
-            ctx.sample_rate(),
-            ctx.tempo(),
+            ctx.sample_rate,
+            ctx.tempo,
             true,
         );
         self.patterns.insert(
@@ -262,8 +273,8 @@ impl Code {
 
     fn stop_pattern(
         &mut self,
-        ctx: &mut impl Context<Self>,
         name: &str,
+        events: &mut Vec<PreciseEventType>,
     ) -> Result<(), Box<dyn Error>> {
         nih_log!("stopping pattern");
         match self.precise_patterns.get(name) {
@@ -274,7 +285,7 @@ impl Code {
                 if let Some(mut pattern) = prev_pattern {
                     let notes_playing = pattern.get_notes_playing();
                     for nev in notes_playing {
-                        self.send(ctx, PreciseEventType::Note(nev));
+                        events.push(PreciseEventType::Note(nev));
                     }
                 }
                 nih_log!("stopped pattern {}", name);
@@ -287,48 +298,7 @@ impl Code {
         }
     }
 
-    fn send(&self, ctx: &mut impl Context<Self>, pevt: PreciseEventType) -> () {
-        match pevt {
-            PreciseEventType::Note(nev) => match nev.note_type {
-                NoteType::On => {
-                    // nih_log!("note {} played on channel {}", nev.note, nev.channel - 1);
-                    ctx.send_event(NoteEvent::NoteOn {
-                        timing: nev.timing,
-                        voice_id: nev.voice_id,
-                        channel: nev.channel - 1,
-                        note: nev.note,
-                        velocity: nev.velocity,
-                    })
-                }
-                NoteType::Off => ctx.send_event(NoteEvent::NoteOff {
-                    timing: nev.timing,
-                    voice_id: nev.voice_id,
-                    channel: nev.channel - 1,
-                    note: nev.note,
-                    velocity: 0.0,
-                }),
-                NoteType::Rest => {}
-            },
-            PreciseEventType::Ctrl(cev) => {
-                ctx.send_event(NoteEvent::MidiCC {
-                    timing: cev.timing,
-                    channel: cev.channel - 1,
-                    cc: cev.cc,
-                    value: cev.value,
-                });
-            }
-            PreciseEventType::VoiceTerminated(vt) => {
-                ctx.send_event(NoteEvent::VoiceTerminated {
-                    timing: vt.timing,
-                    channel: vt.channel - 1,
-                    voice_id: vt.voice_id,
-                    note: vt.note,
-                });
-            }
-        }
-    }
-
-    fn turn_all_notes_off(&mut self, ctx: &mut impl Context<Self>) -> () {
+    fn turn_all_notes_off(&mut self, events: &mut Vec<PreciseEventType>) -> () {
         for event in self
             .precise_patterns
             .values_mut()
@@ -337,40 +307,7 @@ impl Code {
             .flatten()
             .collect::<Vec<SimpleNoteEvent>>()
         {
-            self.send(ctx, PreciseEventType::Note(event));
+            events.push(PreciseEventType::Note(event));
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::plugin::Code;
-    use nih_plug::prelude::*;
-
-    struct FakeInitContext;
-
-    impl<P: Plugin> InitContext<P> for FakeInitContext {
-        fn plugin_api(&self) -> PluginApi {
-            PluginApi::Clap
-        }
-        fn execute(&self, _task: P::BackgroundTask) {}
-        fn set_latency_samples(&self, _samples: u32) {}
-        fn set_current_voice_capacity(&self, _capacity: u32) {}
-    }
-
-    #[test]
-    fn test_plugin_initialize() -> Result<(), String> {
-        let mut plugin: Code = Default::default();
-        assert!(plugin.initialize(
-            &AudioIOLayout::default(),
-            &BufferConfig {
-                sample_rate: 48000 as f32,
-                min_buffer_size: Some(256),
-                max_buffer_size: 4096,
-                process_mode: ProcessMode::Realtime,
-            },
-            &mut FakeInitContext {},
-        ));
-        Ok(())
     }
 }

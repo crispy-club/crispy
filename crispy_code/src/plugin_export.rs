@@ -1,40 +1,18 @@
 use crate::controller::{create_router, Command, Controller};
 use crate::http_commands::HTTP_LISTEN_PORT;
 use crate::plugin::Code;
+use crate::precise::{NoteType, PreciseEventType};
 use nih_plug::prelude::*;
 use rtrb::RingBuffer;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::sync::oneshot;
 
-pub trait Context<P: Plugin> {
-    fn playing(&self) -> bool;
-    fn pos_samples(&self) -> Option<i64>;
-    fn sample_rate(&self) -> f32;
-    fn tempo(&self) -> f64;
-    fn send_event(&mut self, event: PluginNoteEvent<P>);
-}
-
-impl<P: Plugin, T: ProcessContext<P>> Context<P> for T {
-    fn playing(&self) -> bool {
-        self.transport().playing
-    }
-
-    fn pos_samples(&self) -> Option<i64> {
-        self.transport().pos_samples()
-    }
-
-    fn sample_rate(&self) -> f32 {
-        self.transport().sample_rate
-    }
-
-    fn tempo(&self) -> f64 {
-        self.transport().tempo.unwrap_or(120.0 as f64)
-    }
-
-    fn send_event(&mut self, event: PluginNoteEvent<P>) {
-        ProcessContext::send_event(self, event)
-    }
+pub struct Context {
+    pub playing: bool,
+    pub pos_samples: i64,
+    pub sample_rate: f32,
+    pub tempo: f64,
 }
 
 impl Plugin for Code {
@@ -112,7 +90,24 @@ impl Plugin for Code {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         let buf_size = buffer.samples();
-        self.cycle(buf_size, context)
+        let ctx = Context {
+            playing: context.transport().playing,
+            pos_samples: context.transport().pos_samples().unwrap_or(0), // TODO: track pos_samples ourselves
+            sample_rate: context.transport().sample_rate,
+            tempo: context.transport().tempo.unwrap_or(120.),
+        };
+        let (process_status, events) = self.cycle(buf_size, &ctx);
+        if matches!(process_status, ProcessStatus::Error(_)) {
+            return process_status;
+        }
+        for event in events {
+            let nih_event = to_nih_event::<Self>(event);
+            if nih_event.is_none() {
+                continue;
+            }
+            context.send_event(nih_event.unwrap());
+        }
+        ProcessStatus::Normal
     }
 
     fn deactivate(&mut self) -> () {
@@ -120,6 +115,40 @@ impl Plugin for Code {
         if let Some(sender) = self.shutdown_tx.take() {
             sender.send(()).expect("Failed to send shutdown signal");
         }
+    }
+}
+
+fn to_nih_event<P: Plugin>(pevt: PreciseEventType) -> Option<PluginNoteEvent<P>> {
+    match pevt {
+        PreciseEventType::Note(nev) => match nev.note_type {
+            NoteType::On => Some(NoteEvent::NoteOn {
+                timing: nev.timing,
+                voice_id: nev.voice_id,
+                channel: nev.channel - 1,
+                note: nev.note,
+                velocity: nev.velocity,
+            }),
+            NoteType::Off => Some(NoteEvent::NoteOff {
+                timing: nev.timing,
+                voice_id: nev.voice_id,
+                channel: nev.channel - 1,
+                note: nev.note,
+                velocity: 0.0,
+            }),
+            NoteType::Rest => None,
+        },
+        PreciseEventType::Ctrl(cev) => Some(NoteEvent::MidiCC {
+            timing: cev.timing,
+            channel: cev.channel - 1,
+            cc: cev.cc,
+            value: cev.value,
+        }),
+        PreciseEventType::VoiceTerminated(vt) => Some(NoteEvent::VoiceTerminated {
+            timing: vt.timing,
+            channel: vt.channel - 1,
+            voice_id: vt.voice_id,
+            note: vt.note,
+        }),
     }
 }
 
