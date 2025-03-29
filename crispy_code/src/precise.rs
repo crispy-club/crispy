@@ -1,3 +1,4 @@
+use crate::dur::PatternOffsetSamples;
 use crate::pattern::{CtrlEvent, Event, EventType, Note, Pattern};
 use nih_plug::nih_log;
 use serde::Serialize;
@@ -19,6 +20,7 @@ pub struct SimpleNoteEvent {
     pub channel: u8,
     pub note: u8,
     pub velocity: f32,
+    pub note_length_samples: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -46,7 +48,7 @@ pub enum PreciseEventType {
 
 #[derive(Clone, PartialEq, Serialize)]
 pub struct PrecisePattern {
-    pub events: HashMap<usize, Vec<PreciseEventType>>,
+    pub events: HashMap<PatternOffsetSamples, Vec<PreciseEventType>>,
     pub length_samples: usize,
     pub playing: bool,
     // (channel, note) -> voice_id
@@ -77,6 +79,11 @@ fn insert_note(
     pattern_length_samples: usize,
     sample_idx: usize,
 ) {
+    let event_length_samples = event.dur.num * tick_length_samples;
+    let note_length_samples = (note.dur.num * event_length_samples) / note.dur.den;
+    let note_off_timing =
+        (((sample_idx as i64) + note_length_samples) as u32) % (pattern_length_samples as u32);
+
     events_map.insert(
         sample_idx,
         vec![PreciseEventType::Note(SimpleNoteEvent {
@@ -86,13 +93,9 @@ fn insert_note(
             channel: channel,
             note: note.note_num,
             velocity: note.velocity,
+            note_length_samples: note_length_samples as usize,
         })],
     );
-    let event_length_samples = event.dur.num * tick_length_samples;
-    let note_length_samples = (note.dur.num * event_length_samples) / note.dur.den;
-    let note_off_timing =
-        (((sample_idx as i64) + note_length_samples) as u32) % (pattern_length_samples as u32);
-
     events_map.insert(
         note_off_timing as usize,
         vec![PreciseEventType::Note(SimpleNoteEvent {
@@ -102,6 +105,7 @@ fn insert_note(
             channel: channel,
             note: note.note_num,
             velocity: 0.0,
+            note_length_samples: 0 as usize, // FIXME
         })],
     );
 }
@@ -166,6 +170,7 @@ fn insert_event(
                     channel: 1,
                     note: 0,
                     velocity: 0.0,
+                    note_length_samples: 0 as usize, // FIXME
                 })],
             );
         }
@@ -303,6 +308,7 @@ impl PrecisePattern {
                             channel: ev.channel,
                             note: ev.note,
                             velocity: ev.velocity,
+                            note_length_samples: ev.note_length_samples,
                         }),
                         PreciseEventType::Ctrl(ev) => PreciseEventType::Ctrl(SimpleCtrlEvent {
                             timing: ((ev.timing as usize) - adj_start + timing_offset) as u32,
@@ -337,6 +343,7 @@ impl PrecisePattern {
                 channel: k.0,
                 note: k.1,
                 velocity: 0.0,
+                note_length_samples: 0 as usize, // FIXME
             })
             .collect();
         self.notes_playing = HashMap::new();
@@ -464,6 +471,7 @@ mod tests {
                     channel: 1,
                     note: 60,
                     velocity: 0.8,
+                    note_length_samples: 6545 as usize,
                 })],
             ),
             (
@@ -482,6 +490,7 @@ mod tests {
                         channel: 1,
                         note: 60,
                         velocity: 0.0,
+                        note_length_samples: 0 as usize, // FIXME
                     }),
                 ],
             ),
@@ -494,6 +503,7 @@ mod tests {
                     channel: 1,
                     note: 96,
                     velocity: 0.8,
+                    note_length_samples: 6545 as usize,
                 })],
             ),
             (
@@ -512,6 +522,7 @@ mod tests {
                         channel: 1,
                         note: 96,
                         velocity: 0.0,
+                        note_length_samples: 0 as usize, // FIXME
                     }),
                 ],
             ),
@@ -525,6 +536,7 @@ mod tests {
                     channel: 1,
                     note: 60,
                     velocity: 0.8,
+                    note_length_samples: 6545 as usize, // FIXME
                 })],
             ),
         ]);
@@ -610,6 +622,7 @@ mod tests {
                     channel: 1,
                     note: 60,
                     velocity: 0.8,
+                    note_length_samples: 104726 as usize,
                 })],
             ),
             (
@@ -622,6 +635,7 @@ mod tests {
                         channel: 1,
                         note: 96,
                         velocity: 0.0,
+                        note_length_samples: 0 as usize, // FIXME
                     }),
                     PreciseEventType::Note(SimpleNoteEvent {
                         note_type: NoteType::On,
@@ -630,6 +644,7 @@ mod tests {
                         channel: 1,
                         note: 96,
                         velocity: 0.8,
+                        note_length_samples: 104726 as usize,
                     }),
                 ],
             ),
@@ -649,14 +664,16 @@ mod tests {
                         channel: 1,
                         note: 60,
                         velocity: 0.0,
+                        note_length_samples: 0 as usize, // FIXME
                     }),
                     PreciseEventType::Note(SimpleNoteEvent {
                         note_type: NoteType::On,
-                        timing: 23, // sample pos 104727
+                        timing: 23, // sample pos 104726
                         voice_id: None,
                         channel: 1,
                         note: 60,
                         velocity: 0.8,
+                        note_length_samples: 104726 as usize,
                     }),
                 ],
             ),
@@ -676,6 +693,7 @@ mod tests {
                         channel: 1,
                         note: 96,
                         velocity: 0.0,
+                        note_length_samples: 0 as usize, // FIXME
                     }),
                     PreciseEventType::Note(SimpleNoteEvent {
                         note_type: NoteType::On,
@@ -684,6 +702,7 @@ mod tests {
                         channel: 1,
                         note: 96,
                         velocity: 0.8,
+                        note_length_samples: 104726 as usize,
                     }),
                 ],
             ),
