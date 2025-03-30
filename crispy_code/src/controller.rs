@@ -5,8 +5,7 @@ use axum::{
 use rtrb::Producer;
 use std::sync::{Arc, Mutex};
 
-#[allow(dead_code)]
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Command {
     // Would be cool to have this pattern-list feature
     // once we have events coming out of the plugin.
@@ -18,7 +17,6 @@ pub enum Command {
     PatternClearAll,
 }
 
-#[allow(dead_code)]
 pub struct Controller {
     pub commands_tx: Mutex<Producer<Command>>,
 }

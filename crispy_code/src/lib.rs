@@ -1,4 +1,4 @@
-mod controller;
+pub mod controller;
 pub mod dsl;
 pub mod dur;
 pub mod http_commands;

@@ -76,14 +76,11 @@ fn insert_note(
     note: &Note,
     channel: u8,
     tick_length_samples: i64,
-    pattern_length_samples: usize,
+    _pattern_length_samples: usize,
     sample_idx: usize,
 ) {
     let event_length_samples = event.dur.num * tick_length_samples;
     let note_length_samples = (note.dur.num * event_length_samples) / note.dur.den;
-    let note_off_timing =
-        (((sample_idx as i64) + note_length_samples) as u32) % (pattern_length_samples as u32);
-
     events_map.insert(
         sample_idx,
         vec![PreciseEventType::Note(SimpleNoteEvent {
@@ -94,18 +91,6 @@ fn insert_note(
             note: note.note_num,
             velocity: note.velocity,
             note_length_samples: note_length_samples as usize,
-        })],
-    );
-    events_map.insert(
-        note_off_timing as usize,
-        vec![PreciseEventType::Note(SimpleNoteEvent {
-            note_type: NoteType::Off,
-            timing: note_off_timing,
-            voice_id: None,
-            channel: channel,
-            note: note.note_num,
-            velocity: 0.0,
-            note_length_samples: 0 as usize, // FIXME
         })],
     );
 }

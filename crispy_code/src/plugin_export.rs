@@ -110,7 +110,7 @@ impl Plugin for Code {
         ProcessStatus::Normal
     }
 
-    fn deactivate(&mut self) -> () {
+    fn deactivate(&mut self) {
         nih_log!("shutting down http thread...");
         if let Some(sender) = self.shutdown_tx.take() {
             sender.send(()).expect("Failed to send shutdown signal");
@@ -149,6 +149,17 @@ fn to_nih_event<P: Plugin>(pevt: PreciseEventType) -> Option<PluginNoteEvent<P>>
             voice_id: vt.voice_id,
             note: vt.note,
         }),
+    }
+}
+
+impl Code {
+    pub fn tests_init(&mut self) -> Arc<Controller> {
+        let (commands_tx, commands_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
+        let commands = Arc::new(Controller {
+            commands_tx: Mutex::new(commands_tx),
+        });
+        self.commands_rx = Some(commands_rx);
+        commands
     }
 }
 

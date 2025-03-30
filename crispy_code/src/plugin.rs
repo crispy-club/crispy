@@ -107,18 +107,27 @@ impl Code {
             if let PreciseEventType::Note(note) = event {
                 match note.note_type {
                     NoteType::On => {
-                        self.schedule_note_off(note, ctx.pos_samples);
+                        self.schedule_note_off(note, ctx.pos_samples, buf_size);
                     }
                     _ => {}
                 }
             }
             events.push(event);
         }
-        for (song_pos_samples, fut_events) in self.get_future_events(ctx.pos_samples, buf_size) {
+        for (event_song_pos_samples, fut_events) in
+            self.get_future_events(ctx.pos_samples, buf_size)
+        {
             for event in fut_events {
+                println!(
+                    "added a future event {:?} because its sample offset {} between {} and {}",
+                    event,
+                    event_song_pos_samples,
+                    ctx.pos_samples,
+                    ctx.pos_samples + (buf_size as i64),
+                );
                 events.push(event);
             }
-            self.future_events.remove(&song_pos_samples);
+            self.future_events.remove(&event_song_pos_samples);
         }
         ProcessStatus::Normal
     }
@@ -130,27 +139,42 @@ impl Code {
         ProcessStatus::Normal
     }
 
-    fn schedule_note_off(&mut self, note: SimpleNoteEvent, song_pos_samples: i64) {
-        let offset = (song_pos_samples as usize) + note.note_length_samples;
+    fn schedule_note_off(
+        &mut self,
+        note_on: SimpleNoteEvent,
+        song_pos_samples: i64,
+        buf_size: usize,
+    ) {
+        assert!(matches!(note_on.note_type, NoteType::On));
+        let offset =
+            (song_pos_samples as usize) + note_on.note_length_samples + (note_on.timing as usize);
         if let Some(events) = self.future_events.get_mut(&offset) {
             events.push(PreciseEventType::Note(SimpleNoteEvent {
                 note_type: NoteType::Off,
                 timing: 0, // TBD when we actually send the note-off
-                voice_id: note.voice_id,
-                channel: note.channel,
-                note: note.note,
+                voice_id: note_on.voice_id,
+                channel: note_on.channel,
+                note: note_on.note,
                 velocity: 0.0,
                 note_length_samples: 0 as usize,
             }));
         } else {
+            println!(
+                "scheduled note off to happen at sample {} (song_pos_samples = {})",
+                offset, song_pos_samples
+            );
+            let len = note_on.note_length_samples as u32;
+            let norem = (buf_size as u32) - note_on.timing;
+            let bs = buf_size as u32;
+            let note_off_timing = (len - norem) - (((len - norem) / bs) * bs);
             self.future_events.insert(
                 offset,
                 vec![PreciseEventType::Note(SimpleNoteEvent {
                     note_type: NoteType::Off,
-                    timing: 0, // TBD when we actually send the note-off
-                    voice_id: note.voice_id,
-                    channel: note.channel,
-                    note: note.note,
+                    timing: note_off_timing as u32,
+                    voice_id: note_on.voice_id,
+                    channel: note_on.channel,
+                    note: note_on.note,
                     velocity: 0.0,
                     note_length_samples: 0 as usize,
                 })],
@@ -168,7 +192,7 @@ impl Code {
             .filter(|pair| {
                 let (song_sample_position, _) = pair;
                 **song_sample_position >= (pos_samples as usize)
-                    && **song_sample_position > (pos_samples as usize) + buf_size
+                    && **song_sample_position < (pos_samples as usize) + buf_size
             })
             .map(|pair| {
                 let (song_sample_position, events) = pair;
