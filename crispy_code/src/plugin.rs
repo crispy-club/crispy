@@ -1,5 +1,4 @@
 use crate::controller::Command;
-use crate::dur::SongOffsetSamples;
 use crate::pattern::{NamedPattern, Pattern};
 use crate::plugin_export::Context;
 use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
@@ -28,7 +27,6 @@ pub struct Code {
 
     patterns: HashMap<String, Pattern>,
     precise_patterns: HashMap<String, PrecisePattern>,
-    future_events: HashMap<SongOffsetSamples, Vec<PreciseEventType>>,
 
     // Command thread will be shutdown by the plugin thread using this.
     tempo_prev_cycle: f64,
@@ -43,7 +41,6 @@ impl Default for Code {
             // Will be done on the first process() call.
             patterns: HashMap::new(),
             precise_patterns: HashMap::new(),
-            future_events: HashMap::new(),
             commands_rx: None,
             shutdown_tx: None,
             tempo_prev_cycle: 0.0 as f64,
@@ -104,30 +101,7 @@ impl Code {
             self.recompute_patterns(ctx);
         }
         for event in self.get_events(ctx.pos_samples, buf_size) {
-            if let PreciseEventType::Note(note) = event {
-                match note.note_type {
-                    NoteType::On => {
-                        self.schedule_note_off(note, ctx.pos_samples, buf_size);
-                    }
-                    _ => {}
-                }
-            }
             events.push(event);
-        }
-        for (event_song_pos_samples, fut_events) in
-            self.get_future_events(ctx.pos_samples, buf_size)
-        {
-            for event in fut_events {
-                println!(
-                    "added a future event {:?} because its sample offset {} between {} and {}",
-                    event,
-                    event_song_pos_samples,
-                    ctx.pos_samples,
-                    ctx.pos_samples + (buf_size as i64),
-                );
-                events.push(event);
-            }
-            self.future_events.remove(&event_song_pos_samples);
         }
         ProcessStatus::Normal
     }
@@ -139,68 +113,6 @@ impl Code {
         ProcessStatus::Normal
     }
 
-    fn schedule_note_off(
-        &mut self,
-        note_on: SimpleNoteEvent,
-        song_pos_samples: i64,
-        buf_size: usize,
-    ) {
-        assert!(matches!(note_on.note_type, NoteType::On));
-        let offset =
-            (song_pos_samples as usize) + note_on.note_length_samples + (note_on.timing as usize);
-        if let Some(events) = self.future_events.get_mut(&offset) {
-            events.push(PreciseEventType::Note(SimpleNoteEvent {
-                note_type: NoteType::Off,
-                timing: 0, // TBD when we actually send the note-off
-                voice_id: note_on.voice_id,
-                channel: note_on.channel,
-                note: note_on.note,
-                velocity: 0.0,
-                note_length_samples: 0 as usize,
-            }));
-        } else {
-            println!(
-                "scheduled note off to happen at sample {} (song_pos_samples = {})",
-                offset, song_pos_samples
-            );
-            let len = note_on.note_length_samples as u32;
-            let norem = (buf_size as u32) - note_on.timing;
-            let bs = buf_size as u32;
-            let note_off_timing = (len - norem) - (((len - norem) / bs) * bs);
-            self.future_events.insert(
-                offset,
-                vec![PreciseEventType::Note(SimpleNoteEvent {
-                    note_type: NoteType::Off,
-                    timing: note_off_timing as u32,
-                    voice_id: note_on.voice_id,
-                    channel: note_on.channel,
-                    note: note_on.note,
-                    velocity: 0.0,
-                    note_length_samples: 0 as usize,
-                })],
-            );
-        }
-    }
-
-    fn get_future_events(
-        &mut self,
-        pos_samples: i64,
-        buf_size: usize,
-    ) -> Vec<(usize, Vec<PreciseEventType>)> {
-        self.future_events
-            .iter()
-            .filter(|pair| {
-                let (song_sample_position, _) = pair;
-                **song_sample_position >= (pos_samples as usize)
-                    && **song_sample_position < (pos_samples as usize) + buf_size
-            })
-            .map(|pair| {
-                let (song_sample_position, events) = pair;
-                (*song_sample_position, events.clone())
-            })
-            .collect()
-    }
-
     fn get_events(&mut self, pos_samples: i64, buf_size: usize) -> Vec<PreciseEventType> {
         return self
             .precise_patterns
@@ -208,7 +120,7 @@ impl Code {
             .into_iter()
             .map(move |precise_pattern| {
                 precise_pattern
-                    .get_events(pos_samples as usize, (pos_samples as usize) + buf_size)
+                    .get_events(pos_samples, buf_size)
                     .into_iter()
             })
             .flatten()

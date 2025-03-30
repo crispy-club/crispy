@@ -2,7 +2,7 @@ use crispy_code::controller::Command;
 use crispy_code::dsl::notes;
 use crispy_code::plugin::Code;
 use crispy_code::plugin_export::Context;
-use crispy_code::precise::{NoteType, PreciseEventType, SimpleNoteEvent};
+use crispy_code::precise::{NoteType, PreciseEventType, SimpleNoteEvent, VoiceTerminatedEvent};
 use nih_plug::prelude::*;
 use std::collections::HashMap;
 
@@ -118,7 +118,7 @@ fn test_plugin_pattern_update() -> Result<(), String> {
                     exp_events: vec![PreciseEventType::Note(SimpleNoteEvent {
                         note_type: NoteType::On,
                         timing: 0 as u32,
-                        voice_id: None,
+                        voice_id: Some(0),
                         channel: 1,
                         note: 60,
                         velocity: 0.89,
@@ -131,15 +131,23 @@ fn test_plugin_pattern_update() -> Result<(), String> {
                 93,
                 CycleTest {
                     commands: vec![],
-                    exp_events: vec![PreciseEventType::Note(SimpleNoteEvent {
-                        note_type: NoteType::Off,
-                        timing: 192 as u32,
-                        voice_id: None,
-                        channel: 1,
-                        note: 60,
-                        velocity: 0.0,
-                        note_length_samples: 0 as usize,
-                    })],
+                    exp_events: vec![
+                        PreciseEventType::Note(SimpleNoteEvent {
+                            note_type: NoteType::Off,
+                            timing: 192 as u32,
+                            voice_id: Some(0),
+                            channel: 1,
+                            note: 60,
+                            velocity: 0.0,
+                            note_length_samples: 0 as usize,
+                        }),
+                        PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
+                            timing: 192,
+                            channel: 1,
+                            voice_id: Some(0),
+                            note: 60,
+                        }),
+                    ],
                     exp_status: ProcessStatus::Normal,
                 },
             ),
