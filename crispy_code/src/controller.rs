@@ -113,7 +113,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     #[tokio::test]
-    async fn test_pattern_start_endpoint_missing_channel() {
+    async fn test_start_pattern_endpoint_missing_channel() {
         let (commands_tx, mut commands_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
         let controller = Arc::new(Controller {
             commands_tx: Mutex::new(commands_tx),
@@ -161,6 +161,62 @@ mod tests {
                 name: String::from("foo"),
             })
         );
+    }
+
+    #[tokio::test]
+    async fn test_stop_pattern_endpoint_channel_provided() {
+        let (commands_tx, mut commands_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
+        let controller = Arc::new(Controller {
+            commands_tx: Mutex::new(commands_tx),
+        });
+        let router = create_router(controller);
+        let server = TestServer::new(router).unwrap();
+        let response = server.post("/stop/foo").await;
+        response.assert_status_ok();
+        let received_val = commands_rx.pop().unwrap();
+        assert_eq!(received_val, Command::PatternStop(String::from("foo")),);
+    }
+
+    #[tokio::test]
+    async fn test_stopall_endpoint_channel_provided() {
+        let (commands_tx, mut commands_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
+        let controller = Arc::new(Controller {
+            commands_tx: Mutex::new(commands_tx),
+        });
+        let router = create_router(controller);
+        let server = TestServer::new(router).unwrap();
+        let response = server.post("/stopall").await;
+        response.assert_status_ok();
+        let received_val = commands_rx.pop().unwrap();
+        assert_eq!(received_val, Command::PatternStopAll);
+    }
+
+    #[tokio::test]
+    async fn test_clear_pattern_endpoint_channel_provided() {
+        let (commands_tx, mut commands_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
+        let controller = Arc::new(Controller {
+            commands_tx: Mutex::new(commands_tx),
+        });
+        let router = create_router(controller);
+        let server = TestServer::new(router).unwrap();
+        let response = server.post("/clear/foo").await;
+        response.assert_status_ok();
+        let received_val = commands_rx.pop().unwrap();
+        assert_eq!(received_val, Command::PatternClear(String::from("foo")),);
+    }
+
+    #[tokio::test]
+    async fn test_clearall_endpoint_channel_provided() {
+        let (commands_tx, mut commands_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
+        let controller = Arc::new(Controller {
+            commands_tx: Mutex::new(commands_tx),
+        });
+        let router = create_router(controller);
+        let server = TestServer::new(router).unwrap();
+        let response = server.post("/clearall").await;
+        response.assert_status_ok();
+        let received_val = commands_rx.pop().unwrap();
+        assert_eq!(received_val, Command::PatternClearAll);
     }
 
     #[tokio::test]
