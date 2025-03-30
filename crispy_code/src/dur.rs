@@ -6,6 +6,9 @@ use std::ops::{Add, Div, Mul, Sub};
 pub static BAR: Dur = Dur { num: 1, den: 1 };
 pub static HALF: Dur = Dur { num: 1, den: 2 };
 
+pub type SongOffsetSamples = usize;
+pub type PatternOffsetSamples = usize;
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Dur {
     pub num: i64,
