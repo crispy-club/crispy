@@ -1,7 +1,7 @@
 use crate::controller::Command;
 use crate::pattern::{NamedPattern, Pattern};
 use crate::plugin_export::Context;
-use crate::precise::{NoteType, PreciseEventType, PrecisePattern, SimpleNoteEvent};
+use crate::precise::{PreciseEventType, PrecisePattern, SimpleNoteEvent};
 use nih_plug::prelude::{nih_log, Params, ProcessStatus};
 use rtrb::{Consumer, PopError};
 use std::collections::HashMap;

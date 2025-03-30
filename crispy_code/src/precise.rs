@@ -735,54 +735,19 @@ mod tests {
             ),
             (
                 204, // Halfway through the pattern
-                vec![
-                    // PreciseEventType::Note(SimpleNoteEvent {
-                    //     note_type: NoteType::Off,
-                    //     timing: 139, // sample pos 52363
-                    //     voice_id: None,
-                    //     channel: 1,
-                    //     note: 96,
-                    //     velocity: 0.0,
-                    //     note_length_samples: 0 as usize, // FIXME
-                    // }),
-                    PreciseEventType::Note(SimpleNoteEvent {
-                        note_type: NoteType::On,
-                        timing: 140, // sample pos 52364
-                        voice_id: Some(1),
-                        channel: 1,
-                        note: 96,
-                        velocity: 0.8,
-                        note_length_samples: 104726 as usize,
-                    }),
-                ],
+                vec![PreciseEventType::Note(SimpleNoteEvent {
+                    note_type: NoteType::On,
+                    timing: 140, // sample pos 52364
+                    voice_id: Some(1),
+                    channel: 1,
+                    note: 96,
+                    velocity: 0.8,
+                    note_length_samples: 104726 as usize,
+                })],
             ),
             (
                 409, // End of the pattern (loops back on itself)
                 vec![
-                    //     Note(SimpleNoteEvent {
-                    //         note_type: On,
-                    //         timing: 23,
-                    //         voice_id: Some(2),
-                    //         channel: 1,
-                    //         note: 60,
-                    //         velocity: 0.8,
-                    //         note_length_samples: 104726,
-                    //     }),
-                    //     Note(SimpleNoteEvent {
-                    //         note_type: Off,
-                    //         timing: 22,
-                    //         voice_id: Some(0),
-                    //         channel: 1,
-                    //         note: 60,
-                    //         velocity: 0.0,
-                    //         note_length_samples: 0,
-                    //     }),
-                    //     VoiceTerminated(VoiceTerminatedEvent {
-                    //         timing: 22,
-                    //         channel: 1,
-                    //         voice_id: Some(0),
-                    //         note: 60,
-                    //     }),
                     PreciseEventType::Note(SimpleNoteEvent {
                         note_type: NoteType::On,
                         timing: 23, // sample pos 104726
@@ -839,58 +804,6 @@ mod tests {
                 ],
             ),
         ]);
-        // let left = [
-        //     Note(SimpleNoteEvent {
-        //         note_type: On,
-        //         timing: 163,
-        //         voice_id: None,
-        //         channel: 1,
-        //         note: 96,
-        //         velocity: 0.8,
-        //         note_length_samples: 104726,
-        //     }),
-        //     Note(SimpleNoteEvent {
-        //         note_type: Off,
-        //         timing: 162,
-        //         voice_id: None,
-        //         channel: 1,
-        //         note: 96,
-        //         velocity: 0.0,
-        //         note_length_samples: 0,
-        //     }),
-        //     VoiceTerminated(VoiceTerminatedEvent {
-        //         timing: 162,
-        //         channel: 1,
-        //         voice_id: Some(1),
-        //         note: 96,
-        //     }),
-        // ];
-        // let right = [
-        //     Note(SimpleNoteEvent {
-        //         note_type: On,
-        //         timing: 163,
-        //         voice_id: Some(2),
-        //         channel: 1,
-        //         note: 96,
-        //         velocity: 0.8,
-        //         note_length_samples: 104726,
-        //     }),
-        //     Note(SimpleNoteEvent {
-        //         note_type: Off,
-        //         timing: 162,
-        //         voice_id: Some(1),
-        //         channel: 1,
-        //         note: 96,
-        //         velocity: 0.0,
-        //         note_length_samples: 0,
-        //     }),
-        //     VoiceTerminated(VoiceTerminatedEvent {
-        //         timing: 162,
-        //         channel: 1,
-        //         voice_id: Some(1),
-        //         note: 96,
-        //     }),
-        // ];
         verify_pattern_playback(&pattern, &expectations)
     }
 }

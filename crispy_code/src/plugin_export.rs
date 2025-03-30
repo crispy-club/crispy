@@ -179,3 +179,95 @@ impl Vst3Plugin for Code {
 
 nih_export_clap!(Code);
 nih_export_vst3!(Code);
+
+#[cfg(test)]
+mod tests {
+    use crate::plugin::Code;
+    use crate::plugin_export::to_nih_event;
+    use crate::precise::{
+        NoteType, PreciseEventType, SimpleCtrlEvent, SimpleNoteEvent, VoiceTerminatedEvent,
+    };
+    use nih_plug::prelude::*;
+
+    #[test]
+    fn test_to_nih_event() {
+        assert_eq!(
+            to_nih_event::<Code>(PreciseEventType::Note(SimpleNoteEvent {
+                note_type: NoteType::On,
+                timing: 0,
+                voice_id: Some(0),
+                channel: 1,
+                note: 60,
+                velocity: 0.89,
+                note_length_samples: 65536,
+            })),
+            Some(NoteEvent::NoteOn {
+                timing: 0,
+                voice_id: Some(0),
+                channel: 0,
+                note: 60,
+                velocity: 0.89,
+            })
+        );
+        assert_eq!(
+            to_nih_event::<Code>(PreciseEventType::Note(SimpleNoteEvent {
+                note_type: NoteType::Off,
+                timing: 0,
+                voice_id: Some(0),
+                channel: 1,
+                note: 60,
+                velocity: 0.0,
+                note_length_samples: 65536,
+            })),
+            Some(NoteEvent::NoteOff {
+                timing: 0,
+                voice_id: Some(0),
+                channel: 0,
+                note: 60,
+                velocity: 0.0,
+            })
+        );
+        assert_eq!(
+            to_nih_event::<Code>(PreciseEventType::Ctrl(SimpleCtrlEvent {
+                timing: 0,
+                channel: 1,
+                cc: 102,
+                value: 0.4,
+            })),
+            Some(NoteEvent::MidiCC {
+                timing: 0,
+                channel: 0,
+                cc: 102,
+                value: 0.4,
+            })
+        );
+        assert_eq!(
+            to_nih_event::<Code>(PreciseEventType::Ctrl(SimpleCtrlEvent {
+                timing: 0,
+                channel: 1,
+                cc: 102,
+                value: 0.4,
+            })),
+            Some(NoteEvent::MidiCC {
+                timing: 0,
+                channel: 0,
+                cc: 102,
+                value: 0.4,
+            })
+        );
+        assert_eq!(
+            to_nih_event::<Code>(PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
+                timing: 0,
+                voice_id: Some(0),
+                channel: 1,
+                note: 60,
+            })),
+            Some(NoteEvent::VoiceTerminated {
+                timing: 0,
+                voice_id: Some(0),
+                channel: 0,
+                note: 60,
+            })
+        );
+    }
+}
