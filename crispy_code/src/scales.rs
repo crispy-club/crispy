@@ -1,9 +1,8 @@
 #[allow(dead_code)]
-struct Scale {
+pub struct Scale {
     pitchclasses: Vec<u8>,
 }
 
-#[allow(dead_code)]
 impl Scale {
     fn acoustic() -> Self {
         Self {

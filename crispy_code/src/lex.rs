@@ -6,6 +6,7 @@ use std::sync::LazyLock;
 
 pub static DEFAULT_OCTAVE: i32 = 3;
 pub static DEFAULT_VELOCITY: f32 = 0.8;
+pub static SCALES_PITCH_CLASS: i32 = 130;
 
 fn get_pitch_class(input: &str) -> i32 {
     let copt = input.chars().next();
@@ -19,9 +20,19 @@ fn get_pitch_class(input: &str) -> i32 {
             'G' => 7,
             'A' => 9,
             'B' => 11,
+            'S' => SCALES_PITCH_CLASS, // Scales
             _ => panic!("unknown pitch class {}", c),
         },
     }
+}
+
+fn is_diatonic(pitch_class: i32) -> bool {
+    return pitch_class != SCALES_PITCH_CLASS;
+}
+
+fn is_scale(note_num: i32) -> bool {
+    let val = note_num - SCALES_PITCH_CLASS;
+    val >= -24 && (val % 12) == 0 // this logic is prob a bit redundant
 }
 
 fn get_velocity(c: char) -> f32 {
@@ -35,7 +46,8 @@ fn get_velocity(c: char) -> f32 {
 }
 
 static NOTE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^([CDEFGAB])?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?(@\d+)?(:\d+)?(;\d+)?$").unwrap()
+    Regex::new(r"^([CDEFGABS])?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?(@\d+)?(:\d+)?(;\d+)?$")
+        .unwrap()
 });
 
 fn parse_note_expr(def: &str) -> Option<Note> {
@@ -74,7 +86,9 @@ pub fn parse_note(def: &str) -> Option<(Note, u32, u32, u32)> {
         note_num = get_pitch_class(matched.as_str());
     }
     if let Some(_sharp) = caps.get(2) {
-        note_num += 1
+        if is_diatonic(note_num) {
+            note_num += 1
+        }
     }
     let mut octave = DEFAULT_OCTAVE;
     if let Some(matched) = caps.get(3) {
@@ -135,13 +149,13 @@ pub enum Token {
     GroupStart,
     #[token("]")]
     GroupEnd,
-    #[regex(r"[CDEFGAB]?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?:(\d+)", |lex| parse_note_repeat(lex.slice()))]
+    #[regex(r"[CDEFGABS]?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?:(\d+)", |lex| parse_note_repeat(lex.slice()))]
     NoteRepeat((Note, u32)),
-    #[regex(r"[CDEFGAB]?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?;(\d+)", |lex| parse_note_repeat_grouped(lex.slice()))]
+    #[regex(r"[CDEFGABS]?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?;(\d+)", |lex| parse_note_repeat_grouped(lex.slice()))]
     NoteRepeatGrouped((Note, u32)),
-    #[regex(r"[CDEFGAB]?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?@(\d+)", |lex| parse_note_tie(lex.slice()))]
+    #[regex(r"[CDEFGABS]?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?@(\d+)", |lex| parse_note_tie(lex.slice()))]
     NoteTie((Note, u32)),
-    #[regex(r"[CDEFGAB]?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?", |lex| parse_note_expr(lex.slice()))]
+    #[regex(r"[CDEFGABS]?(')?(-2|-1|0|1|2|3|4|5|6|7)?([0a-z])?", |lex| parse_note_expr(lex.slice()))]
     NoteExpr(Note),
     #[regex(r"\.:(\d+)", |lex| parse_rest_repeat(lex.slice()))]
     RestRepeat(u32),
@@ -157,7 +171,8 @@ pub enum Token {
 mod test {
     use crate::dur::Dur;
     use crate::lex::{
-        get_velocity, parse_note_expr, parse_note_tie, parse_rest_tie, DEFAULT_VELOCITY, NOTE_REGEX,
+        get_pitch_class, get_velocity, is_diatonic, is_scale, parse_note_expr, parse_note_tie,
+        parse_rest_tie, DEFAULT_VELOCITY, NOTE_REGEX,
     };
     use crate::pattern::Note;
 
@@ -335,5 +350,45 @@ mod test {
     fn test_parse_rest_tie() {
         let tok = parse_rest_tie(".@3");
         assert_eq!(tok, Some(3));
+    }
+
+    #[test]
+    fn test_is_diatonic() {
+        for pitch_class in vec!["C", "D", "E", "F", "G", "A", "B"] {
+            assert!(
+                is_diatonic(get_pitch_class(pitch_class)),
+                "is_diatonic does the obvious thing"
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_scale() {
+        for pitch_class in vec!["C", "D", "E", "F", "G", "A", "B"] {
+            assert!(
+                !is_scale(get_pitch_class(pitch_class)),
+                "diatonic notes are not scale sentinel values"
+            );
+        }
+        assert!(
+            is_scale(get_pitch_class("S")),
+            r#""S" with no octave is a scale"#
+        );
+        assert!(
+            is_scale(get_pitch_class("S") + 12),
+            r#""S" plus an octave is still a scale"#
+        );
+        assert!(
+            is_scale(get_pitch_class("S") + (12 * -2)),
+            r#""S" plus the bottom octave is still a scale"#
+        );
+        assert!(
+            is_scale(get_pitch_class("S") + (12 * 7)),
+            r#""S" plus the top octave is still a scale"#
+        );
+        assert!(
+            !is_scale(get_pitch_class("S") + 11),
+            r#""S" plus a number that is not an octave is not a scale"#
+        );
     }
 }

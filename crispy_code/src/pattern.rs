@@ -1,5 +1,6 @@
 use crate::dur::Dur;
 use crate::lex::parse_note;
+use crate::scales::Scale;
 use nih_plug::nih_log;
 use num::integer::lcm;
 use rhai::{CustomType, TypeBuilder};
@@ -65,6 +66,46 @@ impl Pattern {
             .collect();
         least_common_multiple
     }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ScalePattern {
+    pub channel: u8,
+    pub events: Vec<Event>,
+    pub length_bars: Dur,
+    pub name: String,
+
+    indices: Option<Vec<i32>>,
+}
+
+impl ScalePattern {
+    fn scale(&self, scl: &Scale) -> NamedPattern {
+        // Transform the notes to be notes of the provided scale.
+        NamedPattern {
+            channel: self.channel,
+            events: put_scale_notes(&self.events, scl, &self.indices),
+            length_bars: self.length_bars,
+            name: self.name.clone(),
+        }
+    }
+}
+
+fn put_scale_notes(events: &Vec<Event>, scl: &Scale, indices_opt: &Option<Vec<i32>>) -> Vec<Event> {
+    let res = Vec::<Event>::with_capacity(events.len());
+    let indices = match indices_opt {
+        Some(values) => scale_indices_modulo(scl, &values),
+        None => create_scale_indices(scl),
+    };
+    // put the scale notes into the pattern!
+    res
+}
+
+fn scale_indices_modulo(scl: &Scale, values: &Vec<i32>) -> Vec<i32> {
+    vec![]
+}
+
+fn create_scale_indices(scl: &Scale) -> Vec<i32> {
+    vec![]
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
