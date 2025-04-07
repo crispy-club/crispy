@@ -38,6 +38,10 @@ fn key(def: &str) -> u8 {
     }
 }
 
+fn scl(name: &str) -> Option<&'static [u8]> {
+    Scales.get(name).map(|v| v.as_slice())
+}
+
 pub fn scale(def: &str) -> Result<ScalePattern, ParseError> {
     let pattern = notes(def)?;
     Ok(ScalePattern::WithDefaultIndex(pattern))
@@ -232,5 +236,62 @@ mod tests {
                 },
             );
         }
+    }
+
+    #[test]
+    fn test_key() {
+        assert_eq!(key("C"), 0);
+        assert_eq!(key("C'"), 1);
+        assert_eq!(key("D"), 2);
+        assert_eq!(key("D'"), 3);
+        assert_eq!(key("E"), 4);
+        assert_eq!(key("F"), 5);
+        assert_eq!(key("F'"), 6);
+        assert_eq!(key("G"), 7);
+        assert_eq!(key("G'"), 8);
+        assert_eq!(key("A"), 9);
+        assert_eq!(key("A'"), 10);
+        assert_eq!(key("B"), 11);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_key_panic() {
+        key("X");
+    }
+
+    #[test]
+    fn test_scale_with_custom_index() {
+        let pattern = scale("x e t [f p]")
+            .unwrap()
+            .index(vec![1, 3, 2, 0, 3])
+            .scale(key("G"), scl("hirajoshi").unwrap())
+            .named("foo");
+        assert_eq!(
+            pattern,
+            NamedPattern {
+                channel: 1,
+                // ("hirajoshi", vec![0, 4, 6, 7, 11]),
+                events: vec![
+                    (71, 0.89, 4),
+                    (74, 0.19, 4),
+                    (73, 0.74, 4),
+                    (67, 0.22, 8),
+                    (74, 0.59, 8)
+                ]
+                .into_iter()
+                .map(|t| Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: t.0,
+                        velocity: t.1,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, t.2),
+                })
+                .collect(),
+                length_bars: Dur::new(1, 1),
+                name: String::from("foo"),
+            }
+        );
     }
 }
