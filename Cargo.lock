@@ -468,6 +468,7 @@ dependencies = [
  "axum-macros",
  "axum-test",
  "env_logger",
+ "lazy_static",
  "log",
  "logos",
  "moby-name-gen",
