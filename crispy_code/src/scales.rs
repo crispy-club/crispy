@@ -4,7 +4,6 @@
 use crate::dsl::notes;
 use crate::parse::ParseError;
 use crate::pattern::{Event, EventType, NamedPattern, Note};
-use rhai::Engine;
 use std::collections::HashMap;
 
 /// Panics if key in not in this list
@@ -20,7 +19,7 @@ use std::collections::HashMap;
 /// * `"A"`
 /// * `"A'"`
 /// * `"B"`
-fn key(def: &str) -> u8 {
+fn get_key(def: &str) -> u8 {
     match def {
         "C" => 0,
         "C'" => 1,
@@ -38,24 +37,53 @@ fn key(def: &str) -> u8 {
     }
 }
 
-fn scl(name: &str) -> Option<&'static [u8]> {
-    Scales.get(name).map(|v| v.as_slice())
+// This is a bit verbose and could use some improvement
+// To generate a pattern this way, the rhai code would look
+// something like this
+//
+// scale("x t").scale("C", acoustic)
+//
+// What would be a cleaner API here?
+//
+// scale("C", "x t", acoustic)
+// scali("C", "x t", acoustic, [2, 3, 1, 4])
+//
+// In this approach, the first token in the pattern is actually the key.
+// We would then parse the rest of the pattern as a normal NamedPattern.
+//
+// One thing that's difficult to figure out is how to have the rust
+// functions not be completely tied to rhai. I guess I can do the conversion
+// when I register the function(s)
+// For example, I kind of like registering the scale data as Vec<Dynamic>
+// This gives you the ability to iterate over the values in rhai and
+// makes the data structure feel intuitive
+// But then when a user passes a scale into a rust function it will need
+// to be converted from Vec<Dynamic> back to &[u8]
+//
+pub fn scale(key: &str, def: &str, scl: Vec<u8>) -> Result<NamedPattern, ParseError> {
+    let pattern = notes(def)?;
+    Ok(ScalePattern::WithDefaultIndex(pattern).update_notes(get_key(key), &scl))
 }
 
-pub fn scale(def: &str) -> Result<ScalePattern, ParseError> {
+pub fn scali(
+    key: &str,
+    def: &str,
+    scl: Vec<u8>,
+    idx: Vec<usize>,
+) -> Result<NamedPattern, ParseError> {
     let pattern = notes(def)?;
-    Ok(ScalePattern::WithDefaultIndex(pattern))
+    Ok(ScalePattern::WithCustomIndex(pattern, idx).update_notes(get_key(key), &scl))
 }
 
 /// Forces the notes of a pattern to conform to a scale.
-pub enum ScalePattern {
+enum ScalePattern {
     WithDefaultIndex(NamedPattern),
     WithCustomIndex(NamedPattern, Vec<usize>),
 }
 
 impl ScalePattern {
     /// Panics if key >= 12
-    pub fn scale(&self, key: u8, scl: &'static [u8]) -> NamedPattern {
+    pub fn update_notes(&self, key: u8, scl: &Vec<u8>) -> NamedPattern {
         match self {
             ScalePattern::WithDefaultIndex(pat) => {
                 let idxs = default_indices(&scl);
@@ -78,7 +106,7 @@ impl ScalePattern {
 fn compute_scale_pattern(
     pat: &NamedPattern,
     key: u8,
-    scl: &'static [u8],
+    scl: &Vec<u8>,
     idx: &Vec<usize>,
 ) -> NamedPattern {
     assert!(key < 12);
@@ -93,18 +121,14 @@ fn compute_scale_pattern(
 fn compute_scale_events(
     events: &Vec<Event>,
     key: u8,
-    scl: &'static [u8],
+    scl: &Vec<u8>,
     idx: &Vec<usize>,
 ) -> Vec<Event> {
     assert!(key < 12);
     let mut sev = Vec::<Event>::with_capacity(events.len());
     let mut scl_idx = 0 as usize;
     for event in events.into_iter() {
-        sev.push(compute_scale_event(
-            event,
-            // key + (scl.pitchclasses[idx[scl_idx]] % 12),
-            key + (scl[idx[scl_idx]] % 12),
-        ));
+        sev.push(compute_scale_event(event, key + (scl[idx[scl_idx]] % 12)));
         scl_idx = (scl_idx + 1) % idx.len();
     }
     sev
@@ -127,7 +151,7 @@ fn compute_scale_event(event: &Event, pitchclass: u8) -> Event {
     }
 }
 
-fn default_indices(scl: &'static [u8]) -> Vec<usize> {
+fn default_indices(scl: &Vec<u8>) -> Vec<usize> {
     (0..scl.len()).map(|x| x as usize).collect()
 }
 
@@ -180,16 +204,6 @@ lazy_static::lazy_static! {
     ]);
 }
 
-fn register_scales_for_scripting(engine: &mut Engine) {
-    for (scale_name, pitch_classes) in Scales.iter() {
-        engine.register_global_module(rhai::Shared::new({
-            let mut module = rhai::Module::new();
-            module.set_var(*scale_name, pitch_classes);
-            module
-        }));
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::dur::Dur;
@@ -201,7 +215,7 @@ mod tests {
     #[test]
     fn test_all_the_scales() {
         for scl in Scales.values() {
-            let dee = key("D");
+            let key = "D";
             let pitch_classes = scl.clone();
             let pat = pitch_classes
                 .clone()
@@ -210,11 +224,11 @@ mod tests {
                 .collect::<Vec<&str>>()
                 .as_slice()
                 .join(" ");
-            let actual_pattern = scale(pat.as_str()).unwrap().scale(dee, scl).named("foo");
+            let actual_pattern = scale(key, pat.as_str(), scl.clone()).unwrap().named("foo");
             let note_nums = pitch_classes
                 .clone()
                 .into_iter()
-                .map(|pc| (pc as u8) + dee + (((DEFAULT_OCTAVE as u8) + 2) * 12))
+                .map(|pc| (pc as u8) + get_key(key) + (((DEFAULT_OCTAVE as u8) + 2) * 12))
                 .collect::<Vec<u8>>();
             assert_eq!(
                 actual_pattern,
@@ -239,45 +253,88 @@ mod tests {
     }
 
     #[test]
-    fn test_key() {
-        assert_eq!(key("C"), 0);
-        assert_eq!(key("C'"), 1);
-        assert_eq!(key("D"), 2);
-        assert_eq!(key("D'"), 3);
-        assert_eq!(key("E"), 4);
-        assert_eq!(key("F"), 5);
-        assert_eq!(key("F'"), 6);
-        assert_eq!(key("G"), 7);
-        assert_eq!(key("G'"), 8);
-        assert_eq!(key("A"), 9);
-        assert_eq!(key("A'"), 10);
-        assert_eq!(key("B"), 11);
+    fn test_get_key() {
+        assert_eq!(get_key("C"), 0);
+        assert_eq!(get_key("C'"), 1);
+        assert_eq!(get_key("D"), 2);
+        assert_eq!(get_key("D'"), 3);
+        assert_eq!(get_key("E"), 4);
+        assert_eq!(get_key("F"), 5);
+        assert_eq!(get_key("F'"), 6);
+        assert_eq!(get_key("G"), 7);
+        assert_eq!(get_key("G'"), 8);
+        assert_eq!(get_key("A"), 9);
+        assert_eq!(get_key("A'"), 10);
+        assert_eq!(get_key("B"), 11);
     }
 
     #[test]
     #[should_panic]
-    fn test_key_panic() {
-        key("X");
+    fn test_get_key_panic() {
+        get_key("X");
     }
 
     #[test]
     fn test_scale_with_custom_index() {
-        let pattern = scale("x e t [f p]")
-            .unwrap()
-            .index(vec![1, 3, 2, 0, 3])
-            .scale(key("G"), scl("hirajoshi").unwrap())
-            .named("foo");
+        let key = "G";
+        let pattern = scali(
+            key,
+            "x e t [f p]",
+            Scales.get("hirajoshi").unwrap().clone(),
+            // ("hirajoshi", vec![0, 4, 6, 7, 11]),
+            vec![1, 3, 2, 0, 3],
+        )
+        .unwrap()
+        .named("foo");
         assert_eq!(
             pattern,
             NamedPattern {
                 channel: 1,
-                // ("hirajoshi", vec![0, 4, 6, 7, 11]),
                 events: vec![
                     (71, 0.89, 4),
                     (74, 0.19, 4),
                     (73, 0.74, 4),
                     (67, 0.22, 8),
                     (74, 0.59, 8)
+                ]
+                .into_iter()
+                .map(|t| Event {
+                    action: EventType::NoteEvent(Note {
+                        note_num: t.0,
+                        velocity: t.1,
+                        dur: Dur::new(1, 2),
+                    }),
+                    dur: Dur::new(1, t.2),
+                })
+                .collect(),
+                length_bars: Dur::new(1, 1),
+                name: String::from("foo"),
+            }
+        );
+    }
+
+    #[test]
+    fn test_scale_with_custom_index_and_not_default_octave_values() {
+        let key = "G";
+        let pattern = scali(
+            key,
+            "0x 1e 5t [2f 6p]",
+            Scales.get("hirajoshi").unwrap().clone(),
+            // ("hirajoshi", vec![0, 4, 6, 7, 11]),
+            vec![1, 3, 2, 0, 3],
+        )
+        .unwrap()
+        .named("foo");
+        assert_eq!(
+            pattern,
+            NamedPattern {
+                channel: 1,
+                events: vec![
+                    (71 - (12 * 3), 0.89, 4),
+                    (74 - (12 * 2), 0.19, 4),
+                    (73 + (12 * 2), 0.74, 4),
+                    (67 - 12, 0.22, 8),
+                    (74 + (12 * 3), 0.59, 8)
                 ]
                 .into_iter()
                 .map(|t| Event {
