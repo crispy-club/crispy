@@ -1,4 +1,4 @@
-use crate::controller::Command;
+use crate::controller::{Command, Controller};
 use crate::pattern::{NamedPattern, Pattern};
 use crate::plugin_export::Context;
 use crate::precise::{PreciseEventType, PrecisePattern, SimpleNoteEvent};
@@ -20,6 +20,7 @@ impl Default for CodeParams {
 
 pub struct Code {
     // Plugin thread and command thread will communicate using these.
+    pub controller: Option<Arc<Controller>>,
     pub commands_rx: Option<Consumer<Command>>,
     pub shutdown_tx: Option<oneshot::Sender<()>>,
     pub params: Arc<CodeParams>,
@@ -35,6 +36,7 @@ pub struct Code {
 impl Default for Code {
     fn default() -> Self {
         Self {
+            controller: None,
             params: Arc::new(CodeParams::default()),
             playing: false,
             // We need the tempo and sample rate to properly initialize this.

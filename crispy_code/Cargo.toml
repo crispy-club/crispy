@@ -10,12 +10,21 @@ keywords = ["midi", "plugin", "livecoding", "algorave"]
 description = "A sample-accurate livecoding MIDI event sequencer"
 repository = "https://github.com/briansorahan/crispy"
 
+
 [dependencies]
 axum = { version = "0.7.9", features = ["json", "macros", "tokio"] }
 axum-macros = "0.4.2"
 axum-test = "16.4.1"
+baseview = { git = "https://github.com/RustAudio/baseview", rev = "9a0b42c09d712777b2edb4c5e0cb6baf21e988f0", version = "0.1.0" }
+crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 env_logger = "0.11.6"
-iced = "0.13.1"
+futures = "0.3.31"
+iced = { version = "0.13.1", features = ["highlighter"] }
+iced_baseview = { git = "https://github.com/BillyDM/iced_baseview", rev = "a0842a8205c852127981e27de6342cf2e665562f", version = "0.1.0" }
+iced_futures = "0.13.2"
+iced_graphics = "0.13.0"
+iced_runtime = "0.13.2"
+iced_widget = "0.13.4"
 lazy_static = "1.5.0"
 log = "0.4.26"
 logos = "0.15.0"
@@ -24,6 +33,7 @@ nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["a
 num = "0.4.3"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["blocking", "json"] }
+rfd = "0.15.3"
 rhai = "1.21.0"
 rtrb = "0.3.1"
 rustyline = "15.0.0"
