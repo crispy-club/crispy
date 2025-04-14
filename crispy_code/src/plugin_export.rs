@@ -5,7 +5,6 @@ use crate::precise::{NoteType, PreciseEventType};
 use nih_plug::prelude::*;
 use rtrb::RingBuffer;
 use std::sync::{Arc, Mutex};
-use tokio::sync::oneshot;
 
 pub struct Context {
     pub playing: bool,
@@ -52,34 +51,7 @@ impl Plugin for Code {
         _buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
-        let (commands_tx, commands_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
-        let (shutdown_tx, _shutdown_rx) = oneshot::channel();
-        self.controller = Some(Arc::new(Controller {
-            commands_tx: Mutex::new(commands_tx),
-        }));
-        self.shutdown_tx = Some(shutdown_tx);
-        self.commands_rx = Some(commands_rx);
-
-        nih_log!("initialized CODE");
-        // thread::spawn(move || {
-        //     let router = create_router(commands);
-
-        //     let rt = tokio::runtime::Builder::new_current_thread()
-        //         .enable_all()
-        //         .build()
-        //         .unwrap();
-
-        //     rt.block_on(async move {
-        //         let listener =
-        //             tokio::net::TcpListener::bind(format!("127.0.0.1:{}", HTTP_LISTEN_PORT))
-        //                 .await
-        //                 .unwrap();
-        //         axum::serve(listener, router)
-        //             .with_graceful_shutdown(async move { shutdown_rx.await.ok().unwrap() })
-        //             .await
-        //             .unwrap();
-        //     });
-        // });
+        self.create_ringbuffer();
         true
     }
 
@@ -111,13 +83,11 @@ impl Plugin for Code {
     }
 
     fn deactivate(&mut self) {
-        nih_log!("shutting down http thread...");
-        if let Some(sender) = self.shutdown_tx.take() {
-            sender.send(()).expect("Failed to send shutdown signal");
-        }
+        nih_log!("shutting down...");
     }
 
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
+        self.create_ringbuffer();
         nih_log!("created editor");
         Some(Box::new(CodeEditor::new(
             self.controller.clone().unwrap().clone(),
