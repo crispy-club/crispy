@@ -21,6 +21,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+const SIZE: (u32, u32) = (1024, 768);
+
 pub(crate) struct CodeEditor {
     pub(crate) controller: Arc<Controller>,
     pub(crate) scaling_factor: AtomicCell<Option<f32>>,
@@ -89,7 +91,7 @@ impl Editor for CodeEditor {
         parent: ParentWindowHandle,
         _context: Arc<dyn GuiContext>,
     ) -> Box<dyn std::any::Any + Send> {
-        let (unscaled_width, unscaled_height) = (200, 150);
+        let (unscaled_width, unscaled_height) = SIZE;
 
         let scaling_factor = self.scaling_factor.load();
 
@@ -125,7 +127,7 @@ impl Editor for CodeEditor {
     }
 
     fn size(&self) -> (u32, u32) {
-        (200, 150)
+        SIZE
     }
 
     fn set_scale_factor(&self, _factor: f32) -> bool {
