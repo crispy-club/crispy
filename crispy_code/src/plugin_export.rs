@@ -110,6 +110,10 @@ impl Plugin for Code {
         ProcessStatus::Normal
     }
 
+    fn editor(&mut self, async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
+        editor::create_editor()
+    }
+
     fn deactivate(&mut self) {
         nih_log!("shutting down http thread...");
         if let Some(sender) = self.shutdown_tx.take() {
