@@ -20,9 +20,11 @@ log = "0.4.26"
 logos = "0.15.0"
 moby-name-gen = "0.1.0"
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs"] }
+nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug", package = "nih_plug_egui" }
 num = "0.4.3"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["blocking", "json"] }
+rfd = "0.15.3"
 rhai = "1.21.0"
 rtrb = "0.3.1"
 rustyline = "15.0.0"

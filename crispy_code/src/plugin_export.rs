@@ -1,12 +1,10 @@
-use crate::controller::{create_router, Command, Controller};
-use crate::http_commands::HTTP_LISTEN_PORT;
+use crate::controller::{Command, Controller};
+use crate::editor::create_editor;
 use crate::plugin::Code;
 use crate::precise::{NoteType, PreciseEventType};
 use nih_plug::prelude::*;
 use rtrb::RingBuffer;
 use std::sync::{Arc, Mutex};
-use std::thread;
-use tokio::sync::oneshot;
 
 pub struct Context {
     pub playing: bool,
@@ -53,33 +51,7 @@ impl Plugin for Code {
         _buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
-        let (commands_tx, commands_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
-        let (shutdown_tx, shutdown_rx) = oneshot::channel();
-        let commands = Arc::new(Controller {
-            commands_tx: Mutex::new(commands_tx),
-        });
-        self.shutdown_tx = Some(shutdown_tx);
-        self.commands_rx = Some(commands_rx);
-
-        thread::spawn(move || {
-            let router = create_router(commands);
-
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap();
-
-            rt.block_on(async move {
-                let listener =
-                    tokio::net::TcpListener::bind(format!("127.0.0.1:{}", HTTP_LISTEN_PORT))
-                        .await
-                        .unwrap();
-                axum::serve(listener, router)
-                    .with_graceful_shutdown(async move { shutdown_rx.await.ok().unwrap() })
-                    .await
-                    .unwrap();
-            });
-        });
+        self.create_controller();
         true
     }
 
@@ -110,15 +82,13 @@ impl Plugin for Code {
         ProcessStatus::Normal
     }
 
-    fn editor(&mut self, async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
-        editor::create_editor()
+    fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
+        self.create_controller();
+        create_editor(self.controller.clone().unwrap().clone())
     }
 
     fn deactivate(&mut self) {
-        nih_log!("shutting down http thread...");
-        if let Some(sender) = self.shutdown_tx.take() {
-            sender.send(()).expect("Failed to send shutdown signal");
-        }
+        nih_log!("shutting down...");
     }
 }
 

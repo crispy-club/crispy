@@ -1,3 +1,4 @@
+use crate::controller::Controller;
 use nih_plug::prelude::Editor;
 use nih_plug_egui::{
     create_egui_editor,
@@ -5,16 +6,28 @@ use nih_plug_egui::{
     resizable_window::ResizableWindow,
     EguiState,
 };
+use std::sync::Arc;
 
-fn create_editor() -> Option<Box<dyn Editor>> {
+#[derive(Default)]
+struct TextEditor {
+    text: String,
+    file_path: Option<String>,
+}
+
+pub fn create_editor(_controller: Arc<Controller>) -> Option<Box<dyn Editor>> {
+    let egui_state = EguiState::from_size(1024, 768);
+    let editor = TextEditor::default();
+
     create_egui_editor(
-        EguiState::from_size(1024, 768),
-        (),
+        egui_state.clone(),
+        editor,
         |_, _| {},
-        move |egui_ctx, setter, _state| {
+        move |egui_ctx, _setter, state: &mut TextEditor| {
             ResizableWindow::new("res-wind")
                 .min_size(Vec2::new(128.0, 128.0))
-                .show(egui_ctx, egui_state.as_ref(), |ui| editor_ui(egui_ctx))
+                .show(egui_ctx, egui_state.as_ref(), |ui| {
+                    update(egui_ctx, ui, state)
+                });
         },
     )
 }
@@ -47,36 +60,19 @@ fn setup_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
-#[derive(Default, PartialEq)]
-enum Enum {
-    #[default]
-    First,
-    Second,
-    Third,
-}
-
-#[derive(Default)]
-struct MyApp {
-    a_float: f32,
-    box_checked: bool,
-    my_enum: Enum,
-    text: String,
-    file_path: Option<String>,
-}
-
-fn update(ctx: &egui::Context, ui: egui::Ui) {
+fn update(_ctx: &egui::Context, ui: &mut egui::Ui, editor: &mut TextEditor) {
     if ui.button("Open").clicked() {
         if let Some(path) = rfd::FileDialog::new().pick_file() {
             if let Ok(contents) = std::fs::read_to_string(&path) {
-                self.text = contents;
-                self.file_path = Some(path.display().to_string());
+                editor.text = contents;
+                editor.file_path = Some(path.display().to_string());
             }
         }
     }
 
     if ui.button("Save").clicked() {
-        if let Some(path) = &self.file_path {
-            let _ = std::fs::write(path, &self.text);
+        if let Some(path) = &editor.file_path {
+            let _ = std::fs::write(path, &editor.text);
         }
     }
 
@@ -84,7 +80,7 @@ fn update(ctx: &egui::Context, ui: egui::Ui) {
         .auto_shrink([false; 2])
         .show(ui, |ui| {
             ui.add(
-                egui::TextEdit::multiline(&mut self.text)
+                egui::TextEdit::multiline(&mut editor.text)
                     .desired_rows(30)
                     .desired_width(f32::INFINITY),
             );
