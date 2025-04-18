@@ -505,6 +505,23 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 [[package]]
 name = "baseview"
 version = "0.1.0"
+source = "git+https://github.com/RustAudio/baseview?rev=38295105d4c22bad7b4e3ea0a0c0b32ab4c9bfbf#38295105d4c22bad7b4e3ea0a0c0b32ab4c9bfbf"
+dependencies = [
+ "cocoa",
+ "core-foundation",
+ "keyboard-types",
+ "nix 0.22.3",
+ "objc",
+ "raw-window-handle 0.5.2",
+ "uuid",
+ "winapi",
+ "x11",
+ "x11rb",
+]
+
+[[package]]
+name = "baseview"
+version = "0.1.0"
 source = "git+https://github.com/RustAudio/baseview.git?rev=9a0b42c09d712777b2edb4c5e0cb6baf21e988f0#9a0b42c09d712777b2edb4c5e0cb6baf21e988f0"
 dependencies = [
  "cocoa",
@@ -883,7 +900,11 @@ dependencies = [
  "axum",
  "axum-macros",
  "axum-test",
+ "baseview 0.1.0 (git+https://github.com/RustAudio/baseview?rev=38295105d4c22bad7b4e3ea0a0c0b32ab4c9bfbf)",
+ "dirs",
+ "egui 0.30.0",
  "env_logger",
+ "epaint 0.30.0",
  "lazy_static",
  "log",
  "logos",
@@ -987,6 +1008,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
 
 [[package]]
+name = "dirs"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e01a3366d27ee9890022452ee61b2b63a67e6f13f58900b651ff5665f0bb1fab"
+dependencies = [
+ "libc",
+ "option-ext",
+ "redox_users",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "dispatch"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1032,12 +1074,34 @@ checksum = "f25c0e292a7ca6d6498557ff1df68f32c99850012b6ea401cf8daf771f22ff53"
 
 [[package]]
 name = "ecolor"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d72e9c39f6e11a2e922d04a34ec5e7ef522ea3f5a1acfca7a19d16ad5fe50f5"
+dependencies = [
+ "emath 0.30.0",
+]
+
+[[package]]
+name = "ecolor"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc4feb366740ded31a004a0e4452fbf84e80ef432ecf8314c485210229672fd1"
 dependencies = [
  "bytemuck",
- "emath",
+ "emath 0.31.1",
+]
+
+[[package]]
+name = "egui"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "252d52224d35be1535d7fd1d6139ce071fb42c9097773e79f7665604f5596b5e"
+dependencies = [
+ "ahash",
+ "emath 0.30.0",
+ "epaint 0.30.0",
+ "nohash-hasher",
+ "profiling",
 ]
 
 [[package]]
@@ -1048,8 +1112,8 @@ checksum = "25dd34cec49ab55d85ebf70139cb1ccd29c977ef6b6ba4fe85489d6877ee9ef3"
 dependencies = [
  "ahash",
  "bitflags 2.8.0",
- "emath",
- "epaint",
+ "emath 0.31.1",
+ "epaint 0.31.1",
  "nohash-hasher",
  "profiling",
 ]
@@ -1059,9 +1123,9 @@ name = "egui-baseview"
 version = "0.5.0"
 source = "git+https://github.com/BillyDM/egui-baseview.git?rev=ec70c3fe6b2f070dcacbc22924431edbe24bd1c0#ec70c3fe6b2f070dcacbc22924431edbe24bd1c0"
 dependencies = [
- "baseview",
+ "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=9a0b42c09d712777b2edb4c5e0cb6baf21e988f0)",
  "copypasta",
- "egui",
+ "egui 0.31.1",
  "egui_glow",
  "keyboard-types",
  "log",
@@ -1078,7 +1142,7 @@ checksum = "910906e3f042ea6d2378ec12a6fd07698e14ddae68aed2d819ffe944a73aab9e"
 dependencies = [
  "ahash",
  "bytemuck",
- "egui",
+ "egui 0.31.1",
  "glow",
  "log",
  "memoffset 0.9.1",
@@ -1087,6 +1151,12 @@ dependencies = [
  "web-sys",
  "winit",
 ]
+
+[[package]]
+name = "emath"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4fe73c1207b864ee40aa0b0c038d6092af1030744678c60188a05c28553515d"
 
 [[package]]
 name = "emath"
@@ -1164,6 +1234,22 @@ dependencies = [
 
 [[package]]
 name = "epaint"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5666f8d25236293c966fbb3635eac18b04ad1914e3bab55bc7d44b9980cafcac"
+dependencies = [
+ "ab_glyph",
+ "ahash",
+ "ecolor 0.30.0",
+ "emath 0.30.0",
+ "epaint_default_fonts 0.30.0",
+ "nohash-hasher",
+ "parking_lot",
+ "profiling",
+]
+
+[[package]]
+name = "epaint"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41fcc0f5a7c613afd2dee5e4b30c3e6acafb8ad6f0edb06068811f708a67c562"
@@ -1171,13 +1257,19 @@ dependencies = [
  "ab_glyph",
  "ahash",
  "bytemuck",
- "ecolor",
- "emath",
- "epaint_default_fonts",
+ "ecolor 0.31.1",
+ "emath 0.31.1",
+ "epaint_default_fonts 0.31.1",
  "nohash-hasher",
  "parking_lot",
  "profiling",
 ]
+
+[[package]]
+name = "epaint_default_fonts"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66f6ddac3e6ac6fd4c3d48bb8b1943472f8da0f43a4303bcd8a18aa594401c80"
 
 [[package]]
 name = "epaint_default_fonts"
@@ -2188,7 +2280,7 @@ name = "nih_plug_egui"
 version = "0.0.0"
 source = "git+https://github.com/robbert-vdh/nih-plug.git#400eb3156f221073fbcaf95607b56842272d134b"
 dependencies = [
- "baseview",
+ "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=9a0b42c09d712777b2edb4c5e0cb6baf21e988f0)",
  "crossbeam",
  "egui-baseview",
  "nih_plug",
@@ -2699,6 +2791,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "option-ext"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
 name = "orbclient"
 version = "0.3.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3052,6 +3150,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03a862b389f93e68874fbf580b9de08dd02facb9a788ebadaf4a3fd33cf58834"
 dependencies = [
  "bitflags 2.8.0",
+]
+
+[[package]]
+name = "redox_users"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6f9d3d47bdd2ad6945c5015a226ec6155d0bcdfd8f7cd29f86b71f8de99d2b"
+dependencies = [
+ "getrandom 0.2.15",
+ "libredox",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
