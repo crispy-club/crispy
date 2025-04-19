@@ -1,11 +1,12 @@
 use crate::controller::Controller;
 use logos::Logos;
+// use nih_plug::nih_log;
 use nih_plug::prelude::Editor;
 use nih_plug_egui::{
     create_egui_editor,
     egui::{
         cache::{ComputerMut, FrameCache},
-        text::LayoutJob,
+        text::{CCursor, CCursorRange, LayoutJob},
         CentralPanel, Color32, Context, FontData, FontDefinitions, FontFamily, FontId, Galley,
         ScrollArea, TextEdit, TextFormat, TextStyle, TopBottomPanel, Ui,
     },
@@ -13,50 +14,78 @@ use nih_plug_egui::{
 };
 use std::sync::Arc;
 
+const EDITOR_ID: &'static str = "main_text_editor";
 const WINDOW_SIZE: (u32, u32) = (1024, 768);
 
 #[derive(Default)]
 struct TextEditor {
     contents: String,
-    layout_cache: FrameCache<LayoutJob, SyntaxHighlighter>,
+    layout_cache: Option<FrameCache<LayoutJob, SyntaxHighlighter>>,
+}
+
+impl TextEditor {
+    fn show(&mut self, ui: &mut Ui) {
+        let mut layouter = |ui: &Ui, contents: &str, wrap_width: f32| -> Arc<Galley> {
+            let mut layout_job: LayoutJob = self.layout_cache.as_mut().unwrap().get(contents);
+            layout_job.wrap.max_width = wrap_width;
+            ui.fonts(|f| f.layout_job(layout_job))
+        };
+        let output = TextEdit::multiline(&mut self.contents)
+            .id(EDITOR_ID.into())
+            .font(TextStyle::Monospace)
+            .lock_focus(true)
+            .hint_text("Your code here...")
+            .frame(true)
+            .desired_width(f32::INFINITY)
+            .clip_text(true)
+            .layouter(&mut layouter)
+            .min_size(ui.available_size())
+            .show(ui);
+        // let output = ui.add_sized(ui.available_size(), text_edit);
+        if output.response.changed() {
+            if let Some(cursor_range) = output.cursor_range {
+                if let Some(cursor_pos) = cursor_range.primary.ccursor.index.checked_sub(2) {
+                    if self.contents.get(cursor_pos..cursor_pos + 2) == Some("{\n") {
+                        // Insert indentation after newline
+                        let insert_pos = cursor_pos + 2;
+                        self.contents.insert_str(insert_pos, "    "); // 4 spaces
+
+                        // Move the cursor forward after the spaces
+                        if let Some(mut state) = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()) {
+                            let curs = CCursor::new(insert_pos + 4);
+                            state.cursor.set_char_range(Some(CCursorRange::one(curs)));
+                            state.store(ui.ctx(), EDITOR_ID.into());
+                            ui.ctx().memory_mut(|mem| {
+                                mem.request_focus(EDITOR_ID.into()); // give focus back to the `TextEdit`.
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 pub fn create_editor(_controller: Arc<Controller>) -> Option<Box<dyn Editor>> {
     let egui_state = EguiState::from_size(WINDOW_SIZE.0, WINDOW_SIZE.1);
-    let syntax_highlighter = SyntaxHighlighter::default();
-    let editor = TextEditor {
-        contents: String::new(),
-        layout_cache: FrameCache::new(syntax_highlighter),
-    };
-    // let mut layout_cache: FrameCache<LayoutJob, SyntaxHighlighter> =
-    //     FrameCache::new(syntax_highlighter);
+    let editor = TextEditor::default();
 
     create_egui_editor(
         egui_state.clone(),
         editor,
-        |_, _| {},
+        |_ctx: &Context, state: &mut TextEditor| {
+            let syntax_highlighter = SyntaxHighlighter::default();
+            state.layout_cache = Some(FrameCache::new(syntax_highlighter));
+        },
         move |ctx, _setter, state: &mut TextEditor| {
             setup_fonts(ctx);
 
             TopBottomPanel::bottom("console").show(ctx, |ui| {
                 ui.label("things will be printed down here");
             });
-            let mut layouter = |ui: &Ui, contents: &str, wrap_width: f32| -> Arc<Galley> {
-                let mut layout_job: LayoutJob = state.layout_cache.get(contents);
-                layout_job.wrap.max_width = wrap_width;
-                ui.fonts(|f| f.layout_job(layout_job))
-            };
             CentralPanel::default().show(ctx, |ui| {
                 ScrollArea::vertical().show(ui, |ui| {
-                    let text_edit = TextEdit::multiline(&mut state.contents)
-                        .font(TextStyle::Monospace)
-                        .lock_focus(true)
-                        .hint_text("Your code here...")
-                        .frame(true)
-                        .desired_width(f32::INFINITY)
-                        .clip_text(true)
-                        .layouter(&mut layouter);
-                    ui.add_sized(ui.available_size(), text_edit);
+                    state.show(ui);
                 });
             });
         },
@@ -81,6 +110,10 @@ pub enum RhaiToken {
     Comment,
     #[token("fn")]
     Fn,
+    #[token("{")]
+    OpenBracket,
+    #[token("}")]
+    CloseBracket,
     #[regex(r#""[^"]*""#)]
     NormalString,
     // Only support a single '#' for now
@@ -93,37 +126,41 @@ pub enum RhaiToken {
 #[derive(Default)]
 struct SyntaxHighlighter {}
 
+impl SyntaxHighlighter {
+    fn compute_layout(&mut self, contents: &str) -> LayoutJob {
+        let mut job = LayoutJob::default();
+        let mut lexer = RhaiToken::lexer(contents);
+        while let Some(token) = lexer.next() {
+            let token_str = lexer.slice();
+            job.append(
+                token_str,
+                0.0,
+                TextFormat {
+                    font_id: FontId::monospace(12.0),
+                    color: get_color(&token),
+                    ..Default::default()
+                },
+            );
+        }
+        job
+    }
+}
+
 impl ComputerMut<&str, LayoutJob> for SyntaxHighlighter {
-    fn compute(&mut self, key: &str) -> LayoutJob {
-        rhai_syntax_highlighting(key)
+    fn compute(&mut self, contents: &str) -> LayoutJob {
+        self.compute_layout(contents)
     }
 }
 
-fn rhai_syntax_highlighting(contents: &str) -> LayoutJob {
-    let mut job = LayoutJob::default();
-    let mut lexer = RhaiToken::lexer(contents);
-    while let Some(token) = lexer.next() {
-        let token_str = lexer.slice();
-        job.append(
-            token_str,
-            0.0,
-            TextFormat {
-                font_id: FontId::monospace(12.0),
-                color: get_color(token),
-                ..Default::default()
-            },
-        );
-    }
-    job
-}
-
-fn get_color<E>(tok: Result<RhaiToken, E>) -> Color32 {
-    match tok {
+fn get_color<E>(tok: &Result<RhaiToken, E>) -> Color32 {
+    match *tok {
         Ok(RhaiToken::Keyword) => Color32::LIGHT_RED,
         Ok(RhaiToken::Comment) => Color32::GRAY,
         Ok(RhaiToken::Whitespace | RhaiToken::Newline) => Color32::BLACK,
         Ok(
             RhaiToken::VariableName
+            | RhaiToken::OpenBracket
+            | RhaiToken::CloseBracket
             | RhaiToken::Assignment
             | RhaiToken::Semicolon
             | RhaiToken::Numeric,
