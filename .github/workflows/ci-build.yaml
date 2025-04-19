@@ -19,7 +19,7 @@ jobs:
           LLVM_PROFILE_FILE: 'cargo-test-%p-%m.profraw'
         run: |
           apt-get update
-          apt-get install -y -qq libx11-dev libgl1-mesa-dev
+          apt-get install -y -qq libx11-dev libgl1-mesa-dev libx11-xcb-dev 
           rustup component add llvm-tools-preview clippy
           cargo test --package crispy_code
           cargo clippy
