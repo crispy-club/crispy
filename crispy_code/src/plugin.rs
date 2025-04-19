@@ -1,13 +1,12 @@
-use crate::controller::Command;
+use crate::controller::{Command, Controller};
 use crate::pattern::{NamedPattern, Pattern};
 use crate::plugin_export::Context;
 use crate::precise::{PreciseEventType, PrecisePattern, SimpleNoteEvent};
 use nih_plug::prelude::{nih_log, Params, ProcessStatus};
-use rtrb::{Consumer, PopError};
+use rtrb::{Consumer, PopError, RingBuffer};
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::Arc;
-use tokio::sync::oneshot;
+use std::sync::{Arc, Mutex};
 
 #[derive(Params)]
 pub struct CodeParams {}
@@ -21,7 +20,7 @@ impl Default for CodeParams {
 pub struct Code {
     // Plugin thread and command thread will communicate using these.
     pub commands_rx: Option<Consumer<Command>>,
-    pub shutdown_tx: Option<oneshot::Sender<()>>,
+    pub controller: Option<Arc<Controller>>,
     pub params: Arc<CodeParams>,
     pub playing: bool,
 
@@ -42,7 +41,7 @@ impl Default for Code {
             patterns: HashMap::new(),
             precise_patterns: HashMap::new(),
             commands_rx: None,
-            shutdown_tx: None,
+            controller: None,
             tempo_prev_cycle: 0.0 as f64,
         }
     }
@@ -245,5 +244,17 @@ impl Code {
         {
             events.push(PreciseEventType::Note(event));
         }
+    }
+
+    pub fn create_controller(&mut self) {
+        if self.controller.is_some() && self.commands_rx.is_some() {
+            return;
+        }
+        let (commands_tx, commands_rx) = RingBuffer::<Command>::new(256); // Arbitrary buffer size
+        let controller = Arc::new(Controller {
+            commands_tx: Mutex::new(commands_tx),
+        });
+        self.commands_rx = Some(commands_rx);
+        self.controller = Some(controller);
     }
 }

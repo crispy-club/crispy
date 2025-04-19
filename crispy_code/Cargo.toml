@@ -14,15 +14,21 @@ repository = "https://github.com/briansorahan/crispy"
 axum = { version = "0.7.9", features = ["json", "macros", "tokio"] }
 axum-macros = "0.4.2"
 axum-test = "16.4.1"
+baseview = { git = "https://github.com/RustAudio/baseview", rev = "38295105d4c22bad7b4e3ea0a0c0b32ab4c9bfbf", version = "0.1.0", features = ["opengl"] }
+dirs = "6.0.0"
+egui = "0.30.0"
 env_logger = "0.11.6"
+epaint = "0.30.0"
 lazy_static = "1.5.0"
 log = "0.4.26"
 logos = "0.15.0"
 moby-name-gen = "0.1.0"
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs"] }
+nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug", package = "nih_plug_egui" }
 num = "0.4.3"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["blocking", "json"] }
+rfd = "0.15.3"
 rhai = "1.21.0"
 rtrb = "0.3.1"
 rustyline = "15.0.0"

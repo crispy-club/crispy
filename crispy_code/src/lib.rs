@@ -1,6 +1,7 @@
 pub mod controller;
 pub mod dsl;
 pub mod dur;
+pub mod editor;
 pub mod http_commands;
 pub mod lex;
 pub mod parse;
