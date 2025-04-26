@@ -125,7 +125,6 @@ fn parse_rest_tie(def: &str) -> Option<u32> {
 }
 
 #[derive(Clone, Debug, Logos, PartialEq)]
-#[logos(skip r"[ \t\r\n\f]+")]
 pub enum Token {
     #[token("<")]
     AlternationStart,
@@ -151,6 +150,9 @@ pub enum Token {
     Rest,
     #[token("_")]
     Tie,
+    #[error]
+    #[regex(r"[ \t\r\n\f]+", logos::skip)]
+    Error,
 }
 
 #[cfg(test)]

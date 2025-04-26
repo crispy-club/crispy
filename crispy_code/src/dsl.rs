@@ -23,7 +23,7 @@ fn get_events(def: &str, len_bars: Dur) -> Result<Vec<Event>, ParseError> {
 }
 
 fn get_root_elem(def: &str) -> Result<Element, ParseError> {
-    let tokens: Vec<Token> = Token::lexer(def).map(|res| res.unwrap()).collect();
+    let tokens: Vec<Token> = Token::lexer(def).collect();
     let mut parser = Parser::new();
     let parsed = parser.parse(desugar(tokens))?;
     let elements = parsed.get_elements();
