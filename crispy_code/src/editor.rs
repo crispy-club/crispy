@@ -52,6 +52,7 @@ pub fn create_editor(_controller: Arc<Controller>) -> Option<Box<dyn Editor>> {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Event {
+    KeyClosedCurly,
     KeyOpenCurly,
     KeyEnter,
     KeySpaceBar,
@@ -110,6 +111,7 @@ impl TextEditor {
     fn to_internal_event(event: &egui::Event) -> Event {
         match event {
             egui::Event::Text(text) => match text.as_str() {
+                "}" => Event::KeyClosedCurly,
                 "{" => Event::KeyOpenCurly,
                 " " => Event::KeySpaceBar,
                 _ => Event::Other,
@@ -160,25 +162,31 @@ impl TextEditor {
     fn handle_event_history(&mut self, ui: &Ui, output: &TextEditOutput) {
         nih_log!("handle event history {:?}", self.event_history);
         match (
-            self.event_history[0],
-            self.event_history[1],
             self.event_history[2],
+            self.event_history[1],
+            self.event_history[0],
         ) {
             (
-                Some((Event::KeyEnter, 1)),
-                Some((Event::KeyOpenCurly, 1)),
                 Some((Event::KeySpaceBar, _)),
+                Some((Event::KeyOpenCurly, 1)),
+                Some((Event::KeyEnter, 1)),
             ) => {
-                // indent cursor
                 self.indent_cursor(ui, output);
-                self.clear_events(3);
+                self.clear_events(3)
+            }
+            _ => {}
+        }
+        match (self.event_history[1], self.event_history[0]) {
+            (Some((Event::KeyClosedCurly, 1)), Some((Event::KeyEnter, 1))) => {
+                self.outdent_closed_curly(ui, output);
+                self.clear_events(2)
             }
             _ => {}
         }
         match self.event_history[0] {
             Some((Event::KeyEnter, 1)) => {
                 self.indent_to_match_previous_line(ui, output);
-                self.clear_events(1);
+                self.clear_events(1)
             }
             _ => {}
         }
@@ -202,31 +210,21 @@ impl TextEditor {
     }
 
     fn indent_to_match_previous_line(&mut self, ui: &Ui, output: &TextEditOutput) {
-        nih_log!("indent_to_match_previous_line");
         let lines: Vec<&str> = self.contents.as_str().lines().collect();
         if lines.len() < 2 {
-            nih_log!("number of lines -> {:?}", lines.len());
             return;
         }
         let previous_line = lines[lines.len() - 1];
-        nih_log!("previous line -> {:?}", previous_line);
-        let previous_line_leading_whitespace = get_leading_whitespace(previous_line);
-        if previous_line_leading_whitespace.len() == 0 {
-            nih_log!(
-                "previous_line leading whitespace -> {:?}",
-                previous_line_leading_whitespace.len()
-            );
+        let previous_line_spaces = get_leading_whitespace(previous_line);
+        if previous_line_spaces == 0 {
             return;
         }
-        let indent_spaces = previous_line_leading_whitespace.len();
-        nih_log!("indentation on previous_line -> {:?}", indent_spaces);
-
         if let Some(cursor_range) = output.cursor_range {
             let cursor_pos = cursor_range.primary.ccursor.index;
-            if let Some(new_cursor_pos) = cursor_pos.checked_add(indent_spaces as usize) {
+            if let Some(new_cursor_pos) = cursor_pos.checked_add(previous_line_spaces as usize) {
                 if let Some(mut state) = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()) {
                     self.contents
-                        .push_str(" ".repeat(indent_spaces as usize).as_str());
+                        .push_str(" ".repeat(previous_line_spaces as usize).as_str());
                     let ccursor = CCursor::new(new_cursor_pos);
                     state
                         .cursor
@@ -236,18 +234,45 @@ impl TextEditor {
             }
         }
     }
+
+    fn outdent_closed_curly(&mut self, ui: &Ui, output: &TextEditOutput) {
+        let mut lines: Vec<&str> = self.contents.as_str().lines().collect();
+        let num_lines = lines.len();
+        if num_lines < 2 {
+            return;
+        }
+        let previous_line = lines[num_lines - 1];
+        nih_log!("previous line -> {:?}", previous_line);
+        let previous_line_spaces = get_leading_whitespace(previous_line);
+        if previous_line_spaces < INDENT_SPACES as usize {
+            return;
+        }
+        let indent_spaces = previous_line_spaces - INDENT_SPACES as usize;
+        let replacement = " ".repeat(indent_spaces) + "}\n";
+        lines[num_lines - 1] = replacement.as_str();
+        self.contents = lines.join("\n");
+        if indent_spaces == 0 {
+            // Edit previous line.
+            return;
+        }
+        // TODO: nested blocks
+    }
 }
 
-fn get_leading_whitespace(input: &str) -> String {
-    let mut output = String::new();
+fn get_leading_whitespace(input: &str) -> usize {
+    let mut spaces: usize = 0;
     for c in input.chars() {
         if c.is_whitespace() {
-            output.push(c);
+            if c == ' ' {
+                spaces += 1 as usize;
+            } else if c == '\t' {
+                spaces += INDENT_SPACES as usize;
+            }
         } else {
-            return output;
+            return spaces;
         }
     }
-    output
+    spaces
 }
 
 #[derive(Default)]
@@ -356,8 +381,7 @@ mod test {
 
     #[test]
     fn test_get_leading_whitespace() {
-        let output = get_leading_whitespace("    let x = 1;");
-        assert_eq!(output.len(), 4);
-        assert_eq!(output, "    ");
+        assert_eq!(get_leading_whitespace("    let x = 1;"), 4);
+        assert_eq!(get_leading_whitespace("\tlet x = 1;"), 4);
     }
 }
