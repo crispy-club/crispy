@@ -99,6 +99,8 @@ impl TextEditor {
             got_events = i.events.len() > 0;
         });
         if got_events {
+            // Note that egui crashes if we call handle_event_history in the
+            // ui.input callback above.
             self.handle_event_history(ui, &output);
             ui.ctx()
                 .memory_mut(|mem| mem.request_focus(EDITOR_ID.into()));
@@ -106,7 +108,6 @@ impl TextEditor {
     }
 
     fn to_internal_event(event: &egui::Event) -> Event {
-        nih_log!("converting event {:?} to internal event", event);
         match event {
             egui::Event::Text(text) => match text.as_str() {
                 "{" => Event::KeyOpenCurly,
@@ -131,8 +132,6 @@ impl TextEditor {
         if i_event == Event::Other {
             return;
         }
-        nih_log!("got internal event {:?}", i_event);
-
         if let Some(first_event) = self.event_history[0] {
             if i_event == first_event.0 {
                 self.event_history[0] = Some((i_event, first_event.1 + 1));
@@ -144,6 +143,13 @@ impl TextEditor {
         }
     }
 
+    fn clear_events(&mut self, idx: i32) {
+        assert!(idx < self.event_history.len() as i32);
+        for i in 0..idx {
+            self.event_history[i as usize] = None;
+        }
+    }
+
     fn prepend_event(&mut self, i_event: Event) {
         for idx in (1..self.event_history.len()).rev() {
             self.event_history[idx] = self.event_history[idx - 1];
@@ -152,45 +158,28 @@ impl TextEditor {
     }
 
     fn handle_event_history(&mut self, ui: &Ui, output: &TextEditOutput) {
-        // One of the tricky things about this method is it will need to reset the event history
-        // because we only want to act once on a given set of events.
-        // The naive thing to do would be to set the events to None.
-        // This actually seems fine.
-        // Are there issues with having mixed None/Some in the history?
-        // I don't think there will be....
         nih_log!("handle event history {:?}", self.event_history);
+        match (
+            self.event_history[0],
+            self.event_history[1],
+            self.event_history[2],
+        ) {
+            (
+                Some((Event::KeyEnter, 1)),
+                Some((Event::KeyOpenCurly, 1)),
+                Some((Event::KeySpaceBar, _)),
+            ) => {
+                // indent cursor
+                self.indent_cursor(ui, output);
+                self.clear_events(3);
+            }
+            _ => {}
+        }
         match self.event_history[0] {
-            Some(first_event) => match self.event_history[1] {
-                Some(second_event) => match self.event_history[2] {
-                    Some(third_event) => {
-                        match (first_event, second_event, third_event) {
-                            (
-                                (Event::KeyEnter, 1),
-                                (Event::KeyOpenCurly, 1),
-                                (Event::KeySpaceBar, _),
-                            ) => {
-                                // indent cursor
-                                nih_log!("indenting cursor");
-                                self.indent_cursor(ui, output);
-                                nih_log!("clearing events");
-                                self.event_history[0] = None;
-                                self.event_history[1] = None;
-                                self.event_history[2] = None;
-                            }
-                            _ => {
-                                nih_log!(
-                                    "taking no action! {:?} {:?} {:?}",
-                                    first_event,
-                                    second_event,
-                                    third_event
-                                );
-                            }
-                        }
-                    }
-                    _ => {}
-                },
-                _ => {}
-            },
+            Some((Event::KeyEnter, 1)) => {
+                self.indent_to_match_previous_line(ui, output);
+                self.clear_events(1);
+            }
             _ => {}
         }
     }
@@ -199,21 +188,66 @@ impl TextEditor {
         if let Some(cursor_range) = output.cursor_range {
             let cursor_pos = cursor_range.primary.ccursor.index;
             if let Some(new_cursor_pos) = cursor_pos.checked_add(INDENT_SPACES as usize) {
-                nih_log!("going to set new cursor position {:?}", new_cursor_pos);
                 if let Some(mut state) = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()) {
-                    nih_log!("loaded state");
                     self.contents
                         .push_str(" ".repeat(INDENT_SPACES as usize).as_str());
                     let ccursor = CCursor::new(new_cursor_pos);
                     state
                         .cursor
                         .set_char_range(Some(CCursorRange::one(ccursor)));
-                    nih_log!("storing state");
                     state.store(ui.ctx(), EDITOR_ID.into());
                 }
             }
         }
     }
+
+    fn indent_to_match_previous_line(&mut self, ui: &Ui, output: &TextEditOutput) {
+        nih_log!("indent_to_match_previous_line");
+        let lines: Vec<&str> = self.contents.as_str().lines().collect();
+        if lines.len() < 2 {
+            nih_log!("number of lines -> {:?}", lines.len());
+            return;
+        }
+        let previous_line = lines[lines.len() - 1];
+        nih_log!("previous line -> {:?}", previous_line);
+        let previous_line_leading_whitespace = get_leading_whitespace(previous_line);
+        if previous_line_leading_whitespace.len() == 0 {
+            nih_log!(
+                "previous_line leading whitespace -> {:?}",
+                previous_line_leading_whitespace.len()
+            );
+            return;
+        }
+        let indent_spaces = previous_line_leading_whitespace.len();
+        nih_log!("indentation on previous_line -> {:?}", indent_spaces);
+
+        if let Some(cursor_range) = output.cursor_range {
+            let cursor_pos = cursor_range.primary.ccursor.index;
+            if let Some(new_cursor_pos) = cursor_pos.checked_add(indent_spaces as usize) {
+                if let Some(mut state) = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()) {
+                    self.contents
+                        .push_str(" ".repeat(indent_spaces as usize).as_str());
+                    let ccursor = CCursor::new(new_cursor_pos);
+                    state
+                        .cursor
+                        .set_char_range(Some(CCursorRange::one(ccursor)));
+                    state.store(ui.ctx(), EDITOR_ID.into());
+                }
+            }
+        }
+    }
+}
+
+fn get_leading_whitespace(input: &str) -> String {
+    let mut output = String::new();
+    for c in input.chars() {
+        if c.is_whitespace() {
+            output.push(c);
+        } else {
+            return output;
+        }
+    }
+    output
 }
 
 #[derive(Default)]
@@ -288,6 +322,7 @@ fn setup_fonts(ctx: &Context) {
 
 #[cfg(test)]
 mod test {
+    use crate::editor::*;
     use logos::Logos;
     use rhai_rowan::parser::Parser;
     use rhai_rowan::syntax::SyntaxKind;
@@ -317,5 +352,12 @@ mod test {
                 ]
             );
         }
+    }
+
+    #[test]
+    fn test_get_leading_whitespace() {
+        let output = get_leading_whitespace("    let x = 1;");
+        assert_eq!(output.len(), 4);
+        assert_eq!(output, "    ");
     }
 }
