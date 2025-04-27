@@ -1,4 +1,5 @@
 pub mod controller;
+pub mod custom_text_edit;
 pub mod dsl;
 pub mod dur;
 pub mod editor;

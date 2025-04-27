@@ -11,10 +11,7 @@ description = "A sample-accurate livecoding MIDI event sequencer"
 repository = "https://github.com/briansorahan/crispy"
 
 [workspace]
-members = [
-  "xtask",
-  "crispy_code",
-]
+members = ["xtask", "crispy_code"]
 
 [dependencies]
 axum-test = "16.4.1"

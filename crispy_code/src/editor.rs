@@ -1,4 +1,5 @@
 use crate::controller::Controller;
+use crate::custom_text_edit::{TextEdit, TextEditOutput};
 use logos::Logos;
 use nih_plug::nih_log;
 use nih_plug::prelude::Editor;
@@ -9,9 +10,8 @@ use nih_plug_egui::{
         cache::{ComputerMut, FrameCache},
         text::{CCursor, LayoutJob},
         text_selection::CCursorRange,
-        widgets::text_edit::TextEditOutput,
         CentralPanel, Color32, Context, FontData, FontDefinitions, FontFamily, FontId, Galley,
-        ScrollArea, TextEdit, TextFormat, TextStyle, TopBottomPanel, Ui,
+        ScrollArea, TextFormat, TextStyle, TopBottomPanel, Ui,
     },
     EguiState,
 };
@@ -56,12 +56,17 @@ enum Event {
     KeyOpenCurly,
     KeyEnter,
     KeySpaceBar,
+    Kill,
+    Yank,
+    Copy,
+    Cut,
     Other,
 }
 
 struct TextEditor {
     contents: String,
     event_history: [Option<(Event, i32)>; 5],
+    kill_buffer: Option<String>,
     layout_cache: Option<FrameCache<LayoutJob, SyntaxHighlighter>>,
 }
 
@@ -70,66 +75,14 @@ impl TextEditor {
         Self {
             contents: String::new(),
             event_history: [None; 5],
+            kill_buffer: None,
             layout_cache: None,
         }
     }
 
-    fn show(&mut self, ui: &mut Ui) {
-        let mut layouter = |ui: &Ui, contents: &str, wrap_width: f32| -> Arc<Galley> {
-            let mut layout_job: LayoutJob = self.layout_cache.as_mut().unwrap().get(contents);
-            layout_job.wrap.max_width = wrap_width;
-            ui.fonts(|f| f.layout_job(layout_job))
-        };
-        let output = TextEdit::multiline(&mut self.contents)
-            .id(EDITOR_ID.into())
-            .font(TextStyle::Monospace)
-            .lock_focus(true)
-            .hint_text("Your code here...")
-            .frame(true)
-            .desired_width(f32::INFINITY)
-            .clip_text(true)
-            .layouter(&mut layouter)
-            .min_size(ui.available_size())
-            .show(ui);
-
-        let mut got_events = false;
-        ui.input(|i| {
-            for event in &i.events {
-                self.add_to_event_history(event);
-            }
-            got_events = i.events.len() > 0;
-        });
-        if got_events {
-            // Note that egui crashes if we call handle_event_history in the
-            // ui.input callback above.
-            self.handle_event_history(ui, &output);
-            ui.ctx()
-                .memory_mut(|mem| mem.request_focus(EDITOR_ID.into()));
-        }
-    }
-
-    fn to_internal_event(event: &egui::Event) -> Event {
-        match event {
-            egui::Event::Text(text) => match text.as_str() {
-                "}" => Event::KeyClosedCurly,
-                "{" => Event::KeyOpenCurly,
-                " " => Event::KeySpaceBar,
-                _ => Event::Other,
-            },
-            egui::Event::Key {
-                pressed: false, // trigger events when the key is released
-                key,
-                ..
-            } => match key {
-                egui::Key::Enter => Event::KeyEnter,
-                _ => Event::Other,
-            },
-            _ => Event::Other,
-        }
-    }
-
     fn add_to_event_history(&mut self, event: &egui::Event) {
-        let i_event = Self::to_internal_event(event);
+        nih_log!("event {:?}", event);
+        let i_event = Self::internal_event(event);
 
         if i_event == Event::Other {
             return;
@@ -152,11 +105,18 @@ impl TextEditor {
         }
     }
 
-    fn prepend_event(&mut self, i_event: Event) {
-        for idx in (1..self.event_history.len()).rev() {
-            self.event_history[idx] = self.event_history[idx - 1];
-        }
-        self.event_history[0] = Some((i_event, 1));
+    fn copy(&mut self, ui: &Ui, output: &TextEditOutput) {
+        nih_log!("contents at time of copy() -> {:?}", self.contents);
+        ui.ctx().output(|o| {
+            nih_log!("(copy method) o.copied_text -> {:?}", o.copied_text);
+        });
+    }
+
+    fn cut(&mut self, ui: &Ui, output: &TextEditOutput) {
+        nih_log!("contents at time of cut() -> {:?}", self.contents);
+        ui.ctx().output(|o| {
+            nih_log!("(cut method) o.copied_text -> {:?}", o.copied_text);
+        });
     }
 
     fn handle_event_history(&mut self, ui: &Ui, output: &TextEditOutput) {
@@ -188,6 +148,10 @@ impl TextEditor {
                 self.indent_to_match_previous_line(ui, output);
                 self.clear_events(1)
             }
+            Some((Event::Kill, _)) => (), //self.kill(ui, output),
+            Some((Event::Yank, _)) => self.yank(ui, output),
+            Some((Event::Copy, _)) => self.copy(ui, output),
+            Some((Event::Cut, _)) => self.cut(ui, output),
             _ => {}
         }
     }
@@ -235,6 +199,38 @@ impl TextEditor {
         }
     }
 
+    fn internal_event(event: &egui::Event) -> Event {
+        match event {
+            egui::Event::Text(text) => match text.as_str() {
+                "}" => Event::KeyClosedCurly,
+                "{" => Event::KeyOpenCurly,
+                " " => Event::KeySpaceBar,
+                _ => Event::Other,
+            },
+            egui::Event::Key {
+                pressed: false, // trigger events when the key is released
+                key,
+                modifiers,
+                ..
+            } => match key {
+                egui::Key::Enter => Event::KeyEnter,
+                egui::Key::K if modifiers.ctrl => Event::Kill,
+                egui::Key::Y if modifiers.ctrl => Event::Yank,
+                _ => Event::Other,
+            },
+            egui::Event::Copy => Event::Copy,
+            egui::Event::Cut => Event::Cut,
+            _ => Event::Other,
+        }
+    }
+
+    fn kill(&mut self, ui: &Ui, output: &TextEditOutput) {
+        nih_log!("contents at time of kill() -> {:?}", self.contents);
+        ui.ctx().output(|o| {
+            nih_log!("o.copied_text -> {:?}", o.copied_text);
+        });
+    }
+
     fn outdent_closed_curly(&mut self, ui: &Ui, output: &TextEditOutput) {
         let mut lines: Vec<&str> = self.contents.as_str().lines().collect();
         let num_lines = lines.len();
@@ -256,6 +252,51 @@ impl TextEditor {
             return;
         }
         // TODO: nested blocks
+    }
+
+    fn prepend_event(&mut self, i_event: Event) {
+        for idx in (1..self.event_history.len()).rev() {
+            self.event_history[idx] = self.event_history[idx - 1];
+        }
+        self.event_history[0] = Some((i_event, 1));
+    }
+
+    fn show(&mut self, ui: &mut Ui) {
+        let mut layouter = |ui: &Ui, contents: &str, wrap_width: f32| -> Arc<Galley> {
+            let mut layout_job: LayoutJob = self.layout_cache.as_mut().unwrap().get(contents);
+            layout_job.wrap.max_width = wrap_width;
+            ui.fonts(|f| f.layout_job(layout_job))
+        };
+        let output = TextEdit::multiline(&mut self.contents)
+            .id(EDITOR_ID.into())
+            .font(TextStyle::Monospace)
+            .lock_focus(true)
+            .hint_text("Your code here...")
+            .frame(true)
+            .desired_width(f32::INFINITY)
+            .clip_text(true)
+            .layouter(&mut layouter)
+            .min_size(ui.available_size())
+            .show(ui);
+
+        let mut got_events = false;
+        ui.input(|i| {
+            for event in &i.events {
+                self.add_to_event_history(event);
+            }
+            got_events = i.events.len() > 0;
+        });
+        if got_events {
+            // Note that egui crashes if we call handle_event_history in the
+            // ui.input callback above.
+            self.handle_event_history(ui, &output);
+            ui.ctx()
+                .memory_mut(|mem| mem.request_focus(EDITOR_ID.into()));
+        }
+    }
+
+    fn yank(&mut self, ui: &Ui, output: &TextEditOutput) {
+        nih_log!("contents at time of kill() -> {:?}", self.contents);
     }
 }
 
