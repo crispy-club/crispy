@@ -1171,11 +1171,10 @@ fn check_for_mutating_key_press(
             Some(CCursorRange::one(ccursor))
         }
 
-        Key::K if modifiers.ctrl => {
-            let ccursor = text.delete_paragraph_after_cursor(galley, cursor_range);
-            Some(CCursorRange::one(ccursor))
-        }
-
+        // Key::K if modifiers.ctrl => {
+        //     let ccursor = text.delete_paragraph_after_cursor(galley, cursor_range);
+        //     Some(CCursorRange::one(ccursor))
+        // }
         Key::U if modifiers.ctrl => {
             let ccursor = text.delete_paragraph_before_cursor(galley, cursor_range);
             Some(CCursorRange::one(ccursor))
