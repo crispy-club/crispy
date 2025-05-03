@@ -58,8 +58,9 @@ enum Event {
     KeySpaceBar,
     Kill,
     Yank,
-    Copy,
-    Cut,
+    BackToIndentation,
+    BackWord,
+    ForwardWord,
     Other,
 }
 
@@ -98,6 +99,28 @@ impl TextEditor {
         }
     }
 
+    fn back_to_indentation(&mut self, ui: &Ui, output: &TextEditOutput) {
+        if let Some(cursor_range) = output.cursor_range {
+            let len = self.contents.len();
+            let cursor_pos = cursor_range.primary.ccursor.index;
+            nih_log!("cursor_pos -> {:?}, len -> {:?}", cursor_pos, len);
+            nih_log!("back_to_indentation self.contents -> '{:?}'", self.contents);
+            let buf = self.contents.as_str();
+            let start_idx = match buf[..cursor_pos - 1].rfind("\n") {
+                None => 0,
+                Some(idx) => idx,
+            };
+            let leading_whitespace = get_leading_whitespace(&buf[start_idx..cursor_pos - 1]);
+            nih_log!("leading_whitespace -> {:?}", leading_whitespace);
+            if let Some(new_cursor_pos) = start_idx.checked_add(leading_whitespace + 1) {
+                self.set_cursor_pos(ui, new_cursor_pos);
+            }
+            self.contents.remove(cursor_pos - 1);
+        }
+    }
+
+    fn back_word(&mut self) {}
+
     fn clear_events(&mut self, idx: i32) {
         assert!(idx < self.event_history.len() as i32);
         for i in 0..idx {
@@ -105,22 +128,9 @@ impl TextEditor {
         }
     }
 
-    fn copy(&mut self, ui: &Ui, output: &TextEditOutput) {
-        nih_log!("contents at time of copy() -> {:?}", self.contents);
-        ui.ctx().output(|o| {
-            nih_log!("(copy method) o.copied_text -> {:?}", o.copied_text);
-        });
-    }
-
-    fn cut(&mut self, ui: &Ui, output: &TextEditOutput) {
-        nih_log!("contents at time of cut() -> {:?}", self.contents);
-        ui.ctx().output(|o| {
-            nih_log!("(cut method) o.copied_text -> {:?}", o.copied_text);
-        });
-    }
+    fn forward_word(&mut self) {}
 
     fn handle_event_history(&mut self, ui: &Ui, output: &TextEditOutput) {
-        nih_log!("handle event history {:?}", self.event_history);
         match (
             self.event_history[2],
             self.event_history[1],
@@ -138,7 +148,7 @@ impl TextEditor {
         }
         match (self.event_history[1], self.event_history[0]) {
             (Some((Event::KeyClosedCurly, 1)), Some((Event::KeyEnter, 1))) => {
-                self.outdent_closed_curly(ui, output);
+                self.outdent_closed_curly();
                 self.clear_events(2)
             }
             _ => {}
@@ -148,10 +158,26 @@ impl TextEditor {
                 self.indent_to_match_previous_line(ui, output);
                 self.clear_events(1)
             }
-            Some((Event::Kill, _)) => (), //self.kill(ui, output),
-            Some((Event::Yank, _)) => self.yank(ui, output),
-            Some((Event::Copy, _)) => self.copy(ui, output),
-            Some((Event::Cut, _)) => self.cut(ui, output),
+            Some((Event::Kill, _)) => {
+                self.kill(output);
+                self.clear_events(1)
+            }
+            Some((Event::Yank, _)) => {
+                self.yank(ui, output);
+                self.clear_events(1)
+            }
+            Some((Event::BackToIndentation, _)) => {
+                self.back_to_indentation(ui, output);
+                self.clear_events(1)
+            }
+            Some((Event::BackWord, _)) => {
+                self.back_word();
+                self.clear_events(1)
+            }
+            Some((Event::ForwardWord, _)) => {
+                self.forward_word();
+                self.clear_events(1)
+            }
             _ => {}
         }
     }
@@ -159,16 +185,10 @@ impl TextEditor {
     fn indent_cursor(&mut self, ui: &Ui, output: &TextEditOutput) {
         if let Some(cursor_range) = output.cursor_range {
             let cursor_pos = cursor_range.primary.ccursor.index;
+            self.contents
+                .push_str(" ".repeat(INDENT_SPACES as usize).as_str());
             if let Some(new_cursor_pos) = cursor_pos.checked_add(INDENT_SPACES as usize) {
-                if let Some(mut state) = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()) {
-                    self.contents
-                        .push_str(" ".repeat(INDENT_SPACES as usize).as_str());
-                    let ccursor = CCursor::new(new_cursor_pos);
-                    state
-                        .cursor
-                        .set_char_range(Some(CCursorRange::one(ccursor)));
-                    state.store(ui.ctx(), EDITOR_ID.into());
-                }
+                self.set_cursor_pos(ui, new_cursor_pos);
             }
         }
     }
@@ -205,6 +225,9 @@ impl TextEditor {
                 "}" => Event::KeyClosedCurly,
                 "{" => Event::KeyOpenCurly,
                 " " => Event::KeySpaceBar,
+                "µ" => Event::BackToIndentation,
+                "∫" => Event::BackWord,
+                "ƒ" => Event::ForwardWord,
                 _ => Event::Other,
             },
             egui::Event::Key {
@@ -216,22 +239,36 @@ impl TextEditor {
                 egui::Key::Enter => Event::KeyEnter,
                 egui::Key::K if modifiers.ctrl => Event::Kill,
                 egui::Key::Y if modifiers.ctrl => Event::Yank,
+                // These matches that look for modifiers.alt never trigger
+                egui::Key::M if modifiers.alt => Event::BackToIndentation,
+                egui::Key::F if modifiers.alt => Event::ForwardWord,
+                egui::Key::B if modifiers.alt => Event::BackWord,
                 _ => Event::Other,
             },
-            egui::Event::Copy => Event::Copy,
-            egui::Event::Cut => Event::Cut,
             _ => Event::Other,
         }
     }
 
-    fn kill(&mut self, ui: &Ui, output: &TextEditOutput) {
-        nih_log!("contents at time of kill() -> {:?}", self.contents);
-        ui.ctx().output(|o| {
-            nih_log!("o.copied_text -> {:?}", o.copied_text);
-        });
+    fn kill(&mut self, output: &TextEditOutput) {
+        if let Some(cursor_range) = output.cursor_range {
+            let start_idx = cursor_range.primary.ccursor.index;
+            let buf = self.contents.as_str();
+            let end_idx = match buf[start_idx..].find("\n") {
+                None => self.contents.len(),
+                Some(idx) => idx + start_idx,
+            };
+            if end_idx > start_idx {
+                self.kill_buffer = Some(buf[start_idx..end_idx].to_string());
+                self.contents.replace_range(start_idx..end_idx, "");
+            } else {
+                nih_log!("end_idx ({:?}) <= start_idx ({:?})", end_idx, start_idx);
+            }
+        } else {
+            nih_log!("output.cursor_range is None");
+        }
     }
 
-    fn outdent_closed_curly(&mut self, ui: &Ui, output: &TextEditOutput) {
+    fn outdent_closed_curly(&mut self) {
         let mut lines: Vec<&str> = self.contents.as_str().lines().collect();
         let num_lines = lines.len();
         if num_lines < 2 {
@@ -259,6 +296,16 @@ impl TextEditor {
             self.event_history[idx] = self.event_history[idx - 1];
         }
         self.event_history[0] = Some((i_event, 1));
+    }
+
+    fn set_cursor_pos(&self, ui: &Ui, new_cursor_pos: usize) {
+        if let Some(mut state) = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()) {
+            let ccursor = CCursor::new(new_cursor_pos);
+            state
+                .cursor
+                .set_char_range(Some(CCursorRange::one(ccursor)));
+            state.store(ui.ctx(), EDITOR_ID.into());
+        }
     }
 
     fn show(&mut self, ui: &mut Ui) {
@@ -296,7 +343,17 @@ impl TextEditor {
     }
 
     fn yank(&mut self, ui: &Ui, output: &TextEditOutput) {
-        nih_log!("contents at time of kill() -> {:?}", self.contents);
+        if self.kill_buffer.is_none() {
+            return;
+        }
+        if let Some(buf) = &self.kill_buffer {
+            let kb_size = buf.len();
+            if let Some(cursor_range) = output.cursor_range {
+                let start_idx = cursor_range.primary.ccursor.index;
+                self.contents.insert_str(start_idx, buf.as_str());
+                self.set_cursor_pos(ui, kb_size + start_idx);
+            }
+        }
     }
 }
 
