@@ -56,6 +56,7 @@ enum Event {
     KeyOpenCurly,
     KeyEnter,
     KeySpaceBar,
+    Abort,
     Kill,
     Yank,
     BackToIndentation,
@@ -82,6 +83,18 @@ impl TextEditor {
             layout_cache: None,
             snippet_anchor: None,
         }
+    }
+
+    fn abort(&mut self, ui: &Ui) {
+        if let Some(mut state) = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()) {
+            if let Some(curr_char_range) = state.cursor.char_range() {
+                state
+                    .cursor
+                    .set_char_range(Some(CCursorRange::one(curr_char_range.primary)));
+                state.store(ui.ctx(), EDITOR_ID.into());
+            }
+        }
+        self.snippet_anchor = None;
     }
 
     fn add_to_event_history(&mut self, event: &egui::Event) {
@@ -179,6 +192,10 @@ impl TextEditor {
                 self.indent_to_match_previous_line(ui, output);
                 self.clear_events(1)
             }
+            Some((Event::Abort, _)) => {
+                self.abort(ui);
+                self.clear_events(1)
+            }
             Some((Event::Kill, _)) => {
                 self.kill(output);
                 self.clear_events(1)
@@ -262,6 +279,7 @@ impl TextEditor {
                 ..
             } => match key {
                 egui::Key::Enter => Event::KeyEnter,
+                egui::Key::G if modifiers.ctrl => Event::Abort,
                 egui::Key::K if modifiers.ctrl => Event::Kill,
                 egui::Key::Y if modifiers.ctrl => Event::Yank,
                 egui::Key::Space if modifiers.ctrl => Event::Snippet,
@@ -363,9 +381,7 @@ impl TextEditor {
             // Note that egui crashes if we call handle_event_history in the
             // ui.input callback above.
             self.handle_event_history(ui, &output);
-            self.snippet_highlight(ui, &output);
-            // ui.ctx()
-            //     .memory_mut(|mem| mem.request_focus(EDITOR_ID.into()));
+            self.snippet_highlight(ui);
         }
     }
 
@@ -375,14 +391,14 @@ impl TextEditor {
         }
     }
 
-    fn snippet_highlight(&mut self, ui: &Ui, output: &TextEditOutput) {
+    fn snippet_highlight(&mut self, ui: &Ui) {
         if self.snippet_anchor.is_none() {
             return;
         }
         let anchor = self.snippet_anchor.unwrap();
         if let Some(mut state) = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()) {
-            if let Some(cursor_range) = output.cursor_range {
-                let cursor_pos = cursor_range.primary.ccursor.index;
+            if let Some(char_range) = state.cursor.char_range() {
+                let cursor_pos = char_range.primary.index;
                 if anchor == cursor_pos {
                     return;
                 }
@@ -415,7 +431,7 @@ impl TextEditor {
 }
 
 fn find_next_word_beginning(input: &str, pos: usize) -> Option<usize> {
-    if pos >= input.len() {
+    if pos > input.len() {
         return None;
     }
     let mut saw_nonword = false;
@@ -432,11 +448,11 @@ fn find_next_word_beginning(input: &str, pos: usize) -> Option<usize> {
             return Some(idx as usize);
         }
     }
-    None
+    Some(input.len() - 1 as usize)
 }
 
 fn find_prev_word_beginning(input: &str, pos: usize) -> Option<usize> {
-    if pos >= input.len() {
+    if pos > input.len() {
         return None;
     }
     let mut saw_word = false;
@@ -453,7 +469,7 @@ fn find_prev_word_beginning(input: &str, pos: usize) -> Option<usize> {
             return Some(input.len() - idx as usize);
         }
     }
-    None
+    Some(0 as usize)
 }
 
 fn get_leading_whitespace(input: &str) -> usize {
@@ -594,11 +610,21 @@ mod test {
 
     #[test]
     fn test_find_prev_word_beginning() {
-        let contents = r#"fn foo() { return 1; }"#;
-        let current_cursor_pos = 11 as usize;
-        assert_eq!(
-            find_prev_word_beginning(contents, current_cursor_pos),
-            Some(3 as usize)
-        );
+        {
+            let contents = r#"fn foo() { return 1; }"#;
+            let current_cursor_pos = 11 as usize;
+            assert_eq!(
+                find_prev_word_beginning(contents, current_cursor_pos),
+                Some(3 as usize)
+            );
+        }
+        {
+            let contents = r#"fn foo() { return 1; }"#;
+            let current_cursor_pos = 3 as usize;
+            assert_eq!(
+                find_prev_word_beginning(contents, current_cursor_pos),
+                Some(0 as usize)
+            );
+        }
     }
 }
