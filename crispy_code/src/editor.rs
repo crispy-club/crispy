@@ -319,7 +319,7 @@ impl TextEditor {
             .font(TextStyle::Monospace)
             .lock_focus(true)
             .hint_text("Your code here...")
-            .frame(true)
+            .frame(false)
             .desired_width(f32::INFINITY)
             .clip_text(true)
             .layouter(&mut layouter)
