@@ -61,6 +61,7 @@ enum Event {
     BackToIndentation,
     BackWord,
     ForwardWord,
+    Snippet,
     Other,
 }
 
@@ -69,6 +70,7 @@ struct TextEditor {
     event_history: [Option<(Event, i32)>; 5],
     kill_buffer: Option<String>,
     layout_cache: Option<FrameCache<LayoutJob, SyntaxHighlighter>>,
+    snippet_anchor: Option<usize>,
 }
 
 impl TextEditor {
@@ -78,6 +80,7 @@ impl TextEditor {
             event_history: [None; 5],
             kill_buffer: None,
             layout_cache: None,
+            snippet_anchor: None,
         }
     }
 
@@ -196,6 +199,10 @@ impl TextEditor {
                 self.forward_word(ui, output);
                 self.clear_events(1)
             }
+            Some((Event::Snippet, _)) => {
+                self.snippet(ui, output);
+                self.clear_events(1)
+            }
             _ => {}
         }
     }
@@ -257,6 +264,7 @@ impl TextEditor {
                 egui::Key::Enter => Event::KeyEnter,
                 egui::Key::K if modifiers.ctrl => Event::Kill,
                 egui::Key::Y if modifiers.ctrl => Event::Yank,
+                egui::Key::Space if modifiers.ctrl => Event::Snippet,
                 // These matches that look for modifiers.alt never trigger
                 egui::Key::M if modifiers.alt => Event::BackToIndentation,
                 egui::Key::F if modifiers.alt => Event::ForwardWord,
@@ -355,8 +363,39 @@ impl TextEditor {
             // Note that egui crashes if we call handle_event_history in the
             // ui.input callback above.
             self.handle_event_history(ui, &output);
-            ui.ctx()
-                .memory_mut(|mem| mem.request_focus(EDITOR_ID.into()));
+            self.snippet_highlight(ui, &output);
+            // ui.ctx()
+            //     .memory_mut(|mem| mem.request_focus(EDITOR_ID.into()));
+        }
+    }
+
+    fn snippet(&mut self, _ui: &Ui, output: &TextEditOutput) {
+        if let Some(cursor_range) = output.cursor_range {
+            self.snippet_anchor = Some(cursor_range.primary.ccursor.index);
+        }
+    }
+
+    fn snippet_highlight(&mut self, ui: &Ui, output: &TextEditOutput) {
+        if self.snippet_anchor.is_none() {
+            return;
+        }
+        let anchor = self.snippet_anchor.unwrap();
+        if let Some(mut state) = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()) {
+            if let Some(cursor_range) = output.cursor_range {
+                let cursor_pos = cursor_range.primary.ccursor.index;
+                if anchor == cursor_pos {
+                    return;
+                }
+                let (start, end) = if anchor < cursor_pos {
+                    (CCursor::new(anchor), CCursor::new(cursor_pos))
+                } else {
+                    (CCursor::new(cursor_pos), CCursor::new(anchor))
+                };
+                state
+                    .cursor
+                    .set_char_range(Some(CCursorRange::two(start, end)));
+                state.store(ui.ctx(), EDITOR_ID.into());
+            }
         }
     }
 
