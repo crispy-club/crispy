@@ -119,7 +119,16 @@ impl TextEditor {
         }
     }
 
-    fn back_word(&mut self) {}
+    fn back_word(&mut self, ui: &Ui, output: &TextEditOutput) {
+        if let Some(cursor_range) = output.cursor_range {
+            let cursor_pos = cursor_range.primary.ccursor.index;
+            if let Some(new_cursor_pos) =
+                find_prev_word_beginning(self.contents.as_str(), cursor_pos)
+            {
+                self.set_cursor_pos(ui, new_cursor_pos);
+            }
+        }
+    }
 
     fn clear_events(&mut self, idx: i32) {
         assert!(idx < self.event_history.len() as i32);
@@ -128,7 +137,16 @@ impl TextEditor {
         }
     }
 
-    fn forward_word(&mut self) {}
+    fn forward_word(&mut self, ui: &Ui, output: &TextEditOutput) {
+        if let Some(cursor_range) = output.cursor_range {
+            let cursor_pos = cursor_range.primary.ccursor.index;
+            if let Some(new_cursor_pos) =
+                find_next_word_beginning(self.contents.as_str(), cursor_pos)
+            {
+                self.set_cursor_pos(ui, new_cursor_pos);
+            }
+        }
+    }
 
     fn handle_event_history(&mut self, ui: &Ui, output: &TextEditOutput) {
         match (
@@ -171,11 +189,11 @@ impl TextEditor {
                 self.clear_events(1)
             }
             Some((Event::BackWord, _)) => {
-                self.back_word();
+                self.back_word(ui, output);
                 self.clear_events(1)
             }
             Some((Event::ForwardWord, _)) => {
-                self.forward_word();
+                self.forward_word(ui, output);
                 self.clear_events(1)
             }
             _ => {}
@@ -357,6 +375,48 @@ impl TextEditor {
     }
 }
 
+fn find_next_word_beginning(input: &str, pos: usize) -> Option<usize> {
+    if pos >= input.len() {
+        return None;
+    }
+    let mut saw_nonword = false;
+
+    for (idx, chr) in input.chars().enumerate() {
+        if idx < pos {
+            continue;
+        }
+        if !chr.is_alphanumeric() {
+            saw_nonword = true;
+            continue;
+        }
+        if chr.is_alphanumeric() && saw_nonword {
+            return Some(idx as usize);
+        }
+    }
+    None
+}
+
+fn find_prev_word_beginning(input: &str, pos: usize) -> Option<usize> {
+    if pos >= input.len() {
+        return None;
+    }
+    let mut saw_word = false;
+
+    for (idx, chr) in input.chars().rev().enumerate() {
+        if idx < input.len() - pos {
+            continue;
+        }
+        if chr.is_alphanumeric() {
+            saw_word = true;
+            continue;
+        }
+        if !chr.is_alphanumeric() && saw_word {
+            return Some(input.len() - idx as usize);
+        }
+    }
+    None
+}
+
 fn get_leading_whitespace(input: &str) -> usize {
     let mut spaces: usize = 0;
     for c in input.chars() {
@@ -481,5 +541,25 @@ mod test {
     fn test_get_leading_whitespace() {
         assert_eq!(get_leading_whitespace("    let x = 1;"), 4);
         assert_eq!(get_leading_whitespace("\tlet x = 1;"), 4);
+    }
+
+    #[test]
+    fn test_find_next_word_beginning() {
+        let contents = r#"fn foo() { return 1; }"#;
+        let current_cursor_pos = 3 as usize;
+        assert_eq!(
+            find_next_word_beginning(contents, current_cursor_pos),
+            Some(11 as usize)
+        );
+    }
+
+    #[test]
+    fn test_find_prev_word_beginning() {
+        let contents = r#"fn foo() { return 1; }"#;
+        let current_cursor_pos = 11 as usize;
+        assert_eq!(
+            find_prev_word_beginning(contents, current_cursor_pos),
+            Some(3 as usize)
+        );
     }
 }

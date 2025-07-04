@@ -933,7 +933,12 @@ fn events(
             }
             Event::Text(text_to_insert) => {
                 // Newlines are handled by `Key::Enter`.
-                if !text_to_insert.is_empty() && text_to_insert != "\n" && text_to_insert != "\r" {
+                if !text_to_insert.is_empty()
+                    && text_to_insert != "\n"
+                    && text_to_insert != "\r"
+                    && text_to_insert != "ƒ"
+                    && text_to_insert != "∫"
+                {
                     let mut ccursor = text.delete_selected(&cursor_range);
 
                     text.insert_text_at(&mut ccursor, text_to_insert, char_limit);
@@ -1171,6 +1176,7 @@ fn check_for_mutating_key_press(
             Some(CCursorRange::one(ccursor))
         }
 
+        // briansorahan: modified this to support kill + yank
         // Key::K if modifiers.ctrl => {
         //     let ccursor = text.delete_paragraph_after_cursor(galley, cursor_range);
         //     Some(CCursorRange::one(ccursor))
