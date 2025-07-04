@@ -1,10 +1,12 @@
 ignore:
+  # Binaries are not worth writing unit tests for
   - "crispy_code/src/bin/*.rs"
   # Ignore this for now because
-  # 1. The code is hard to test.
-  # 2. We will eventually rip out all the http stuff when
-  #    we have a functional text editor in place.
+  # 1. The code is hard to test
+  # 2. We will eventually rip out all the http stuff when we have a functional text editor in place
   - "crispy_code/src/http_commands.rs"
+  # Ignore this because the code is forked from egui, and we will likely not write any tests
+  - "crispy_code/src/custom_text_edit/*.rs"
 coverage:
   precision: 2
   round: down
