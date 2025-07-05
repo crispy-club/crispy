@@ -1,3 +1,4 @@
+use crispy_code::controller::Controller;
 use crispy_code::scripting::setup_engine;
 use env_logger::Env;
 use rhai::Scope;
@@ -6,7 +7,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init_from_env(Env::default());
 
     // Initialize scripting engine
-    let engine = setup_engine();
+    let (controller, _) = Controller::new();
+    let engine = setup_engine(controller);
     let mut scope = Scope::new();
 
     // REPL line editor setup

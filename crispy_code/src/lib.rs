@@ -3,7 +3,6 @@ pub mod custom_text_edit;
 pub mod dsl;
 pub mod dur;
 pub mod editor;
-pub mod http_commands;
 pub mod lex;
 pub mod parse;
 pub mod pattern;

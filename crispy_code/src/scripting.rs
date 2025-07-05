@@ -1,11 +1,12 @@
+use crate::controller::Controller;
 use crate::dsl::notes;
 use crate::dur::Dur;
-use crate::http_commands::{clear, clearall, start, stop, stopall};
 use crate::pattern::NamedPattern;
 use crate::scales::{scale, scali, Scales};
 use rhai::{Array, Dynamic, Engine};
+use std::sync::Arc;
 
-pub fn setup_engine() -> Engine {
+pub fn setup_engine(controller: Arc<Controller>) -> Engine {
     let mut engine = Engine::new();
 
     engine
@@ -35,38 +36,33 @@ pub fn setup_engine() -> Engine {
         }
     });
 
-    register_commands(&mut engine);
+    register_commands(&mut engine, controller);
     register_scales(&mut engine);
 
     engine
 }
 
-fn register_commands(engine: &mut Engine) {
-    engine.register_fn("start", |np: NamedPattern| {
-        if let Err(err) = start(np) {
-            eprintln!("error starting pattern: {}", err);
-        }
-    });
-    engine.register_fn("stop", |np: NamedPattern| {
-        if let Err(err) = stop(np) {
-            eprintln!("error stopping pattern: {}", err);
-        }
-    });
-    engine.register_fn("stopall", || {
-        if let Err(err) = stopall() {
-            eprintln!("error stopping all patterns: {}", err);
-        }
-    });
-    engine.register_fn("clear", |np: NamedPattern| {
-        if let Err(err) = clear(np) {
-            eprintln!("error clearing pattern: {}", err);
-        }
-    });
-    engine.register_fn("clearall", || {
-        if let Err(err) = clearall() {
-            eprintln!("error clearing all patterns: {}", err);
-        }
-    });
+fn register_commands(engine: &mut Engine, controller: Arc<Controller>) {
+    {
+        let cc = Arc::clone(&controller);
+        engine.register_fn("start", move |np| cc.start(np));
+    }
+    {
+        let cc = Arc::clone(&controller);
+        engine.register_fn("stop", move |np| cc.stop(np));
+    }
+    {
+        let cc = Arc::clone(&controller);
+        engine.register_fn("stopall", move || cc.stopall());
+    }
+    {
+        let cc = Arc::clone(&controller);
+        engine.register_fn("clear", move |np| cc.clear(np));
+    }
+    {
+        let cc = Arc::clone(&controller);
+        engine.register_fn("clearall", move || cc.clearall());
+    }
 }
 
 fn pitch_classes_to_array(pitch_classes: Vec<u8>) -> Array {
@@ -118,6 +114,7 @@ fn register_scales(engine: &mut Engine) {
 
 #[cfg(test)]
 mod tests {
+    use crate::controller::Controller;
     use crate::dur::Dur;
     use crate::pattern::{Event, EventType, NamedPattern, Note};
     use crate::scripting::setup_engine;
@@ -125,7 +122,8 @@ mod tests {
 
     #[test]
     fn test_engine() {
-        let engine = setup_engine();
+        let (controller, _) = Controller::new();
+        let engine = setup_engine(controller);
 
         // Passes a basic pattern
         assert!(matches!(
@@ -142,7 +140,8 @@ mod tests {
 
     #[test]
     fn test_scripting_scales_are_global_variables() {
-        let engine = setup_engine();
+        let (controller, _) = Controller::new();
+        let engine = setup_engine(controller);
 
         let result = engine
             .eval_expression::<Vec<Dynamic>>("acoustic")
@@ -163,7 +162,8 @@ mod tests {
 
     #[test]
     fn test_scripting_create_named_pattern_from_scale() {
-        let engine = setup_engine();
+        let (controller, _) = Controller::new();
+        let engine = setup_engine(controller);
 
         let result = engine
             .eval_expression::<NamedPattern>(r#"scale("F'", "x t d o", persian)"#)
@@ -195,7 +195,8 @@ mod tests {
 
     #[test]
     fn test_scripting_create_named_pattern_from_scali() {
-        let engine = setup_engine();
+        let (controller, _) = Controller::new();
+        let engine = setup_engine(controller);
 
         let result = engine
             .eval_expression::<NamedPattern>(r#"scali("F'", "x t d o", persian, [2, 4, 5, 1])"#)

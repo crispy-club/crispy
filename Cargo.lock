@@ -162,15 +162,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "assert_no_alloc"
-version = "1.1.2"
-source = "git+https://github.com/robbert-vdh/rust-assert-no-alloc.git?branch=feature/nested-permit-forbid#a6fb4f62b9624715291e320ea5f0f70e73b035cf"
-dependencies = [
- "backtrace",
- "log",
-]
-
-[[package]]
 name = "async-trait"
 version = "0.1.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1966,7 +1957,6 @@ source = "git+https://github.com/robbert-vdh/nih-plug.git#400eb3156f221073fbcaf9
 dependencies = [
  "anyhow",
  "anymap3",
- "assert_no_alloc",
  "atomic_float",
  "atomic_refcell",
  "backtrace",

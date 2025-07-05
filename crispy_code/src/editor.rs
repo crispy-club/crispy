@@ -1,5 +1,6 @@
 use crate::controller::Controller;
 use crate::custom_text_edit::{TextEdit, TextEditOutput};
+use crate::scripting::setup_engine;
 use logos::Logos;
 use nih_plug::nih_log;
 use nih_plug::prelude::Editor;
@@ -17,14 +18,15 @@ use nih_plug_egui::{
 };
 // use rhai_fmt::{format_source, Options};
 // use rhai_rowan::parser::Parser;
+use rhai::{Engine, Scope};
 use rhai_rowan::syntax::SyntaxKind;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 const EDITOR_ID: &'static str = "main_text_editor";
 const INDENT_SPACES: i32 = 4;
 const WINDOW_SIZE: (u32, u32) = (1024, 768);
 
-pub fn create_editor(_controller: Arc<Controller>) -> Option<Box<dyn Editor>> {
+pub fn create_editor(controller: Arc<Controller>) -> Option<Box<dyn Editor>> {
     let egui_state = EguiState::from_size(WINDOW_SIZE.0, WINDOW_SIZE.1);
     let editor = TextEditor::new();
 
@@ -36,6 +38,8 @@ pub fn create_editor(_controller: Arc<Controller>) -> Option<Box<dyn Editor>> {
             state.layout_cache = Some(FrameCache::new(syntax_highlighter));
         },
         move |ctx, _setter, state: &mut TextEditor| {
+            let scripting_engine = Arc::new(Mutex::new(setup_engine(Arc::clone(&controller))));
+
             setup_fonts(ctx);
 
             TopBottomPanel::bottom("console").show(ctx, |ui| {
@@ -43,7 +47,7 @@ pub fn create_editor(_controller: Arc<Controller>) -> Option<Box<dyn Editor>> {
             });
             CentralPanel::default().show(ctx, |ui| {
                 ScrollArea::vertical().show(ui, |ui| {
-                    state.show(ui);
+                    state.show(ui, scripting_engine);
                 });
             });
         },
@@ -63,6 +67,7 @@ enum Event {
     BackWord,
     ForwardWord,
     Snippet,
+    SnippetSend,
     Other,
 }
 
@@ -86,15 +91,7 @@ impl TextEditor {
     }
 
     fn abort(&mut self, ui: &Ui) {
-        if let Some(mut state) = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()) {
-            if let Some(curr_char_range) = state.cursor.char_range() {
-                state
-                    .cursor
-                    .set_char_range(Some(CCursorRange::one(curr_char_range.primary)));
-                state.store(ui.ctx(), EDITOR_ID.into());
-            }
-        }
-        self.snippet_anchor = None;
+        self.snippet_abort(ui);
     }
 
     fn add_to_event_history(&mut self, event: &egui::Event) {
@@ -164,7 +161,12 @@ impl TextEditor {
         }
     }
 
-    fn handle_event_history(&mut self, ui: &Ui, output: &TextEditOutput) {
+    fn handle_event_history(
+        &mut self,
+        ui: &Ui,
+        scripting_engine: Arc<Mutex<Engine>>,
+        output: &TextEditOutput,
+    ) {
         match (
             self.event_history[2],
             self.event_history[1],
@@ -217,7 +219,11 @@ impl TextEditor {
                 self.clear_events(1)
             }
             Some((Event::Snippet, _)) => {
-                self.snippet(ui, output);
+                self.snippet(output);
+                self.clear_events(1)
+            }
+            Some((Event::SnippetSend, _)) => {
+                self.snippet_send(ui, scripting_engine);
                 self.clear_events(1)
             }
             _ => {}
@@ -278,6 +284,7 @@ impl TextEditor {
                 modifiers,
                 ..
             } => match key {
+                egui::Key::Enter if modifiers.ctrl => Event::SnippetSend,
                 egui::Key::Enter => Event::KeyEnter,
                 egui::Key::G if modifiers.ctrl => Event::Abort,
                 egui::Key::K if modifiers.ctrl => Event::Kill,
@@ -352,7 +359,7 @@ impl TextEditor {
         }
     }
 
-    fn show(&mut self, ui: &mut Ui) {
+    fn show(&mut self, ui: &mut Ui, scripting_engine: Arc<Mutex<Engine>>) {
         let mut layouter = |ui: &Ui, contents: &str, wrap_width: f32| -> Arc<Galley> {
             let mut layout_job: LayoutJob = self.layout_cache.as_mut().unwrap().get(contents);
             layout_job.wrap.max_width = wrap_width;
@@ -380,15 +387,55 @@ impl TextEditor {
         if got_events {
             // Note that egui crashes if we call handle_event_history in the
             // ui.input callback above.
-            self.handle_event_history(ui, &output);
+            self.handle_event_history(ui, scripting_engine, &output);
             self.snippet_highlight(ui);
         }
     }
 
-    fn snippet(&mut self, _ui: &Ui, output: &TextEditOutput) {
+    fn snippet(&mut self, output: &TextEditOutput) {
         if let Some(cursor_range) = output.cursor_range {
             self.snippet_anchor = Some(cursor_range.primary.ccursor.index);
         }
+    }
+
+    fn snippet_abort(&mut self, ui: &Ui) {
+        if let Some(mut state) = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()) {
+            if let Some(curr_char_range) = state.cursor.char_range() {
+                state
+                    .cursor
+                    .set_char_range(Some(CCursorRange::one(curr_char_range.primary)));
+                state.store(ui.ctx(), EDITOR_ID.into());
+            }
+        }
+        self.snippet_anchor = None;
+    }
+
+    fn snippet_send(&mut self, ui: &Ui, scripting_engine: Arc<Mutex<Engine>>) {
+        let anchor = self.snippet_anchor.unwrap();
+        let mut scope = Scope::new();
+
+        if let Some(state) = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()) {
+            if let Some(char_range) = state.cursor.char_range() {
+                let cursor_pos = char_range.primary.index;
+                if anchor == cursor_pos {
+                    return;
+                }
+                let (start, end) = if anchor < cursor_pos {
+                    (CCursor::new(anchor), CCursor::new(cursor_pos))
+                } else {
+                    (CCursor::new(cursor_pos), CCursor::new(anchor))
+                };
+                let engine = scripting_engine.lock().unwrap();
+                let snippet_contents = &self.contents.as_str()[start.index..end.index];
+
+                if let Err(err) = engine.run_with_scope(&mut scope, &snippet_contents) {
+                    nih_log!("error executing snippet contents: {:?}", err);
+                } else {
+                    nih_log!("executed snippet contents: {:?}", snippet_contents);
+                }
+            }
+        }
+        self.snippet_abort(ui);
     }
 
     fn snippet_highlight(&mut self, ui: &Ui) {

@@ -1,6 +1,5 @@
 use crate::dur::Dur;
 use crate::lex::parse_note;
-use nih_plug::nih_log;
 use num::integer::lcm;
 use rhai::{CustomType, TypeBuilder};
 use serde::{Deserialize, Serialize};
@@ -41,28 +40,20 @@ pub struct Pattern {
 
 impl Pattern {
     pub fn compute_events_lcm(&mut self) -> i64 {
-        nih_log!("computing lcm of events {:?}", self.events.clone());
+        // nih_log!("computing lcm of events {:?}", self.events.clone());
         let least_common_multiple = self
             .events
-            .clone()
-            .into_iter()
+            .iter()
             .map(|event| event.dur.den)
             .reduce(|acc, e| lcm(acc, e))
             .unwrap();
-        self.events = self
-            .events
-            .clone()
-            .into_iter()
-            .map(|event| {
-                let mut clone = event.clone();
-                let multiplier = least_common_multiple / event.dur.den;
-                clone.dur = Dur {
-                    num: event.dur.num * multiplier,
-                    den: least_common_multiple,
-                };
-                clone
-            })
-            .collect();
+        for event in &mut self.events {
+            let multiplier = least_common_multiple / event.dur.den;
+            event.dur = Dur {
+                num: event.dur.num * multiplier,
+                den: least_common_multiple,
+            };
+        }
         least_common_multiple
     }
 }

@@ -177,30 +177,21 @@ impl Code {
         named_pattern: NamedPattern,
     ) -> Result<(), Box<dyn Error>> {
         let pattern_length = named_pattern.length_bars;
-        nih_log!("starting pattern {}", named_pattern.name);
-        let precise_pattern = PrecisePattern::from(
-            &mut Pattern {
-                channel: named_pattern.channel,
-                length_bars: pattern_length,
-                events: named_pattern.events.clone(),
-            },
-            ctx.sample_rate,
-            ctx.tempo,
-            true,
-        );
-        self.patterns.insert(
-            named_pattern.name.clone(),
-            Pattern {
-                channel: named_pattern.channel,
-                length_bars: pattern_length,
-                events: named_pattern.events.clone(),
-            },
-        );
-        self.precise_patterns
-            .insert(named_pattern.name.clone(), precise_pattern.clone());
+        let mut pat = Pattern {
+            channel: named_pattern.channel,
+            length_bars: pattern_length,
+            events: named_pattern.events,
+        };
+        let name = named_pattern.name.as_str();
+
+        nih_log!("starting pattern {}", name);
+
+        let precise_pattern = PrecisePattern::from(&mut pat, ctx.sample_rate, ctx.tempo, true);
+        self.patterns.insert(name.into(), pat);
+        self.precise_patterns.insert(name.into(), precise_pattern);
         nih_log!(
             "started pattern {} on channel {}",
-            named_pattern.name,
+            name,
             named_pattern.channel
         );
         Ok(())

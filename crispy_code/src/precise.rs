@@ -228,13 +228,13 @@ impl PrecisePattern {
             );
             sample_idx += ((tick_length_samples * event.dur.num) + extra_samples[idx]) as usize;
         }
-        return PrecisePattern {
+        PrecisePattern {
             events: events_map,
             length_samples: pattern_length_samples,
             playing: playing,
             notes_playing: HashMap::new(),
             future_events: HashMap::new(),
-        };
+        }
     }
 
     pub fn get_events(&mut self, pos_samples: i64, buf_size: usize) -> Vec<PreciseEventType> {
