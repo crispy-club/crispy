@@ -99,3 +99,54 @@ impl Controller {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::controller::*;
+    use crate::dur::Dur;
+    use crate::pattern::NamedPattern;
+
+    #[test]
+    fn test_controller_stop() {
+        let (controller, mut commands_rx) = Controller::new();
+        controller.stop(NamedPattern {
+            channel: 1,
+            events: vec![],
+            length_bars: Dur::new(1, 1),
+            name: String::from("foo"),
+        });
+        assert_eq!(
+            commands_rx.pop(),
+            Ok(Command::PatternStop(String::from("foo")))
+        );
+    }
+
+    #[test]
+    fn test_controller_stopall() {
+        let (controller, mut commands_rx) = Controller::new();
+        controller.stopall();
+        assert_eq!(commands_rx.pop(), Ok(Command::PatternStopAll));
+    }
+
+    #[test]
+    fn test_controller_clear() {
+        let (controller, mut commands_rx) = Controller::new();
+        controller.clear(NamedPattern {
+            channel: 1,
+            events: vec![],
+            length_bars: Dur::new(1, 1),
+            name: String::from("foo"),
+        });
+        assert_eq!(
+            commands_rx.pop(),
+            Ok(Command::PatternClear(String::from("foo")))
+        );
+    }
+
+    #[test]
+    fn test_controller_clearall() {
+        let (controller, mut commands_rx) = Controller::new();
+        controller.clearall();
+        assert_eq!(commands_rx.pop(), Ok(Command::PatternClearAll));
+    }
+}

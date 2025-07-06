@@ -205,7 +205,7 @@ mod tests {
                             velocity: 0.89,
                             dur: HALF
                         }),
-                        dur: BAR,
+                        dur: HALF,
                     },
                     Event {
                         action: EventType::NoteEvent(Note {
@@ -213,7 +213,7 @@ mod tests {
                             velocity: 0.26,
                             dur: HALF
                         }),
-                        dur: BAR,
+                        dur: HALF,
                     },
                 ],
                 length_bars: BAR * 2,
