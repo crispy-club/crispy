@@ -86,7 +86,6 @@ impl NamedPattern {
     }
 
     pub fn len(self, new_length_bars: Dur) -> NamedPattern {
-        let factor = new_length_bars / self.length_bars;
         NamedPattern {
             channel: self.channel,
             events: self
@@ -94,7 +93,7 @@ impl NamedPattern {
                 .into_iter()
                 .map(|ev| Event {
                     action: ev.action,
-                    dur: ev.dur * factor,
+                    dur: ev.dur,
                 })
                 .collect(),
             length_bars: new_length_bars,
