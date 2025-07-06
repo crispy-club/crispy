@@ -607,6 +607,7 @@ fn setup_fonts(ctx: &Context) {
 
 #[cfg(test)]
 mod test {
+    use crate::controller::Controller;
     use crate::editor::*;
     use logos::Logos;
     use rhai_rowan::parser::Parser;
@@ -673,5 +674,12 @@ mod test {
                 Some(0 as usize)
             );
         }
+    }
+
+    #[test]
+    fn test_create_editor() {
+        let (controller, _) = Controller::new();
+        let editor = create_editor(controller);
+        assert!(editor.is_some());
     }
 }
