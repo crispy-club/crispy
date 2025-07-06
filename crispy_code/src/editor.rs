@@ -1,5 +1,5 @@
 use crate::controller::Controller;
-use crate::custom_text_edit::{TextEdit, TextEditOutput};
+use crate::custom_text_edit::{TextEdit, TextEditState};
 use crate::scripting::setup_engine;
 use logos::Logos;
 use nih_plug::nih_log;
@@ -90,6 +90,17 @@ impl TextEditor {
         }
     }
 
+    #[cfg(test)]
+    fn from_contents(contents: &str) -> Self {
+        Self {
+            contents: String::from(contents),
+            event_history: [None; 5],
+            kill_buffer: None,
+            layout_cache: None,
+            snippet_anchor: None,
+        }
+    }
+
     fn abort(&mut self, ctx: &Context) {
         self.snippet_abort(ctx);
     }
@@ -114,17 +125,13 @@ impl TextEditor {
 
     fn back_to_indentation(&mut self, ctx: &Context, cursor_range_opt: Option<CursorRange>) {
         if let Some(cursor_range) = cursor_range_opt {
-            let len = self.contents.len();
             let cursor_pos = cursor_range.primary.ccursor.index;
-            nih_log!("cursor_pos -> {:?}, len -> {:?}", cursor_pos, len);
-            nih_log!("back_to_indentation self.contents -> '{:?}'", self.contents);
             let buf = self.contents.as_str();
             let start_idx = match buf[..cursor_pos - 1].rfind("\n") {
                 None => 0,
                 Some(idx) => idx,
             };
             let leading_whitespace = get_leading_whitespace(&buf[start_idx..cursor_pos - 1]);
-            nih_log!("leading_whitespace -> {:?}", leading_whitespace);
             if let Some(new_cursor_pos) = start_idx.checked_add(leading_whitespace + 1) {
                 self.set_cursor_pos(ctx, new_cursor_pos);
             }
@@ -360,8 +367,15 @@ impl TextEditor {
         self.event_history[0] = Some((i_event, 1));
     }
 
-    fn set_cursor_pos(&self, ctx: &Context, new_cursor_pos: usize) {
+    fn set_char_range(ctx: &Context, range: CCursorRange) {
         if let Some(mut state) = TextEdit::load_state(ctx, EDITOR_ID.into()) {
+            state.cursor.set_char_range(Some(range));
+            state.store(ctx, EDITOR_ID.into());
+        }
+    }
+
+    fn set_cursor_pos(&self, ctx: &Context, new_cursor_pos: usize) {
+        if let Some(mut state) = TextEditState::load(ctx, EDITOR_ID.into()) {
             let ccursor = CCursor::new(new_cursor_pos);
             state
                 .cursor
@@ -410,13 +424,8 @@ impl TextEditor {
     }
 
     fn snippet_abort(&mut self, ctx: &Context) {
-        if let Some(mut state) = TextEdit::load_state(ctx, EDITOR_ID.into()) {
-            if let Some(curr_char_range) = state.cursor.char_range() {
-                state
-                    .cursor
-                    .set_char_range(Some(CCursorRange::one(curr_char_range.primary)));
-                state.store(ctx, EDITOR_ID.into());
-            }
+        if let Some(curr_char_range) = TextEditor::char_range(ctx) {
+            TextEditor::set_char_range(ctx, CCursorRange::one(curr_char_range.primary));
         }
         self.snippet_anchor = None;
     }
@@ -425,25 +434,23 @@ impl TextEditor {
         let anchor = self.snippet_anchor.unwrap();
         let mut scope = Scope::new();
 
-        if let Some(state) = TextEdit::load_state(ctx, EDITOR_ID.into()) {
-            if let Some(char_range) = state.cursor.char_range() {
-                let cursor_pos = char_range.primary.index;
-                if anchor == cursor_pos {
-                    return;
-                }
-                let (start, end) = if anchor < cursor_pos {
-                    (CCursor::new(anchor), CCursor::new(cursor_pos))
-                } else {
-                    (CCursor::new(cursor_pos), CCursor::new(anchor))
-                };
-                let engine = scripting_engine.lock().unwrap();
-                let snippet_contents = &self.contents.as_str()[start.index..end.index];
+        if let Some(char_range) = TextEditor::char_range(ctx) {
+            let cursor_pos = char_range.primary.index;
+            if anchor == cursor_pos {
+                return;
+            }
+            let (start, end) = if anchor < cursor_pos {
+                (CCursor::new(anchor), CCursor::new(cursor_pos))
+            } else {
+                (CCursor::new(cursor_pos), CCursor::new(anchor))
+            };
+            let engine = scripting_engine.lock().unwrap();
+            let snippet_contents = &self.contents.as_str()[start.index..end.index];
 
-                if let Err(err) = engine.run_with_scope(&mut scope, &snippet_contents) {
-                    nih_log!("error executing snippet contents: {:?}", err);
-                } else {
-                    nih_log!("executed snippet contents: {:?}", snippet_contents);
-                }
+            if let Err(err) = engine.run_with_scope(&mut scope, &snippet_contents) {
+                nih_log!("error executing snippet contents: {:?}", err);
+            } else {
+                nih_log!("executed snippet contents: {:?}", snippet_contents);
             }
         }
         self.snippet_abort(ctx);
@@ -454,22 +461,17 @@ impl TextEditor {
             return;
         }
         let anchor = self.snippet_anchor.unwrap();
-        if let Some(mut state) = TextEdit::load_state(ctx, EDITOR_ID.into()) {
-            if let Some(char_range) = state.cursor.char_range() {
-                let cursor_pos = char_range.primary.index;
-                if anchor == cursor_pos {
-                    return;
-                }
-                let (start, end) = if anchor < cursor_pos {
-                    (CCursor::new(anchor), CCursor::new(cursor_pos))
-                } else {
-                    (CCursor::new(cursor_pos), CCursor::new(anchor))
-                };
-                state
-                    .cursor
-                    .set_char_range(Some(CCursorRange::two(start, end)));
-                state.store(ctx, EDITOR_ID.into());
+        if let Some(char_range) = TextEditor::char_range(ctx) {
+            let cursor_pos = char_range.primary.index;
+            if anchor == cursor_pos {
+                return;
             }
+            let (start, end) = if anchor < cursor_pos {
+                (CCursor::new(anchor), CCursor::new(cursor_pos))
+            } else {
+                (CCursor::new(cursor_pos), CCursor::new(anchor))
+            };
+            TextEditor::set_char_range(ctx, CCursorRange::two(start, end));
         }
     }
 
@@ -621,7 +623,12 @@ mod test {
     use crate::controller::Controller;
     use crate::editor::*;
     use logos::Logos;
-    use nih_plug_egui::egui;
+    use nih_plug_egui::egui::{
+        self,
+        epaint::text::cursor::{CCursor, Cursor, PCursor, RCursor},
+        widgets::text_edit::TextEditState,
+        Color32, Context, FontId,
+    };
     use rhai_rowan::parser::Parser;
     use rhai_rowan::syntax::SyntaxKind;
 
