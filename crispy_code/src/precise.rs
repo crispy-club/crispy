@@ -238,7 +238,7 @@ impl PrecisePattern {
     }
 
     pub fn get_events(&mut self, pos_samples: i64, buf_size: usize) -> Vec<PreciseEventType> {
-        let end = (pos_samples as usize) + buf_size;
+        let end = (pos_samples + (buf_size as i64)) as usize;
         let mut events = self.get_curr_events(pos_samples, end);
         // Schedule note-off events for any note-on events output during the current cycle.
         for event in &events {
@@ -304,25 +304,25 @@ impl PrecisePattern {
                             NoteType::Off => {
                                 let voice_id = self.notes_playing.remove(&(nev.channel, nev.note));
 
-                                if let Some(vid) = voice_id {
-                                    selected_events.push(PreciseEventType::Note(SimpleNoteEvent {
-                                        note_type: nev.note_type,
-                                        timing: timing,
-                                        voice_id: voice_id,
-                                        channel: nev.channel,
-                                        note: nev.note,
-                                        velocity: nev.velocity,
-                                        note_length_samples: nev.note_length_samples,
-                                    }));
-                                    // selected_events.push(PreciseEventType::VoiceTerminated(
-                                    //     VoiceTerminatedEvent {
-                                    //         timing: timing,
-                                    //         voice_id: Some(vid),
-                                    //         channel: nev.channel,
-                                    //         note: nev.note,
-                                    //     },
-                                    // ));
-                                }
+                                // if let Some(vid) = voice_id {
+                                selected_events.push(PreciseEventType::Note(SimpleNoteEvent {
+                                    note_type: nev.note_type,
+                                    timing: timing,
+                                    voice_id: voice_id,
+                                    channel: nev.channel,
+                                    note: nev.note,
+                                    velocity: nev.velocity,
+                                    note_length_samples: nev.note_length_samples,
+                                }));
+                                // selected_events.push(PreciseEventType::VoiceTerminated(
+                                //     VoiceTerminatedEvent {
+                                //         timing: timing,
+                                //         voice_id: Some(vid),
+                                //         channel: nev.channel,
+                                //         note: nev.note,
+                                //     },
+                                // ));
+                                // }
                             }
                             NoteType::On => {
                                 let new_voice_id = self.notes_playing.len() as i32;
@@ -387,13 +387,39 @@ impl PrecisePattern {
 
     fn schedule_note_off(&mut self, note_on: SimpleNoteEvent, pos_samples: i64, end: usize) {
         assert!(matches!(note_on.note_type, NoteType::On));
-        let buf_size = end - (pos_samples as usize);
+        let buf_size = ((end as i64) - pos_samples) as usize;
         let len = note_on.note_length_samples as u32;
-        let norem = (buf_size as u32) - note_on.timing;
+        // 	16:06:23 [INFO] crispy_code::plugin: starting CODE (sample rate 48000) (tempo 110)
+        // 16:06:23 [INFO] crispy_code::precise: >>>>>>>>>>>>>>>>> buf_size 512 note_on.timing 37029
+        nih_log!(
+            ">>>>>>>>>>>>>>>>> buf_size {:?} note_on.timing {:?}",
+            buf_size,
+            note_on.timing
+        );
+        let norem = (buf_size as u32) - (note_on.timing % (buf_size as u32));
         let bs = buf_size as u32;
         let note_off_timing = (len - norem) - (((len - norem) / bs) * bs);
+        nih_log!(
+            ">>>>>>>>>>>>>>>>> pos_samples {:?} note_on.timing {:?} note_on.note_length_samples {:?}",
+            buf_size,
+	    note_on.timing,
+            note_on.note_length_samples
+        );
+        // 	16:23:29 [INFO] crispy_code::precise: >>>>>>>>>>>>>>>>> pos_samples 512 note_on.timing 37029 note_on.note_length_samples 3272
+        // 16:23:29 [ERROR] nih_plug::wrapper::util: thread 'unnamed' panicked at 'attempt to add with overflow': crispy_code/src/precise.rs:409
+        //
+        //
+        //
+        // 16:29:59 [INFO] crispy_code::precise: >>>>>>>>>>>>>>>>> buf_size 512 note_on.timing 141756
+        // 	16:29:59 [INFO] crispy_code::precise: >>>>>>>>>>>>>>>>> pos_samples 512 note_on.timing 141756 note_on.note_length_samples 104727
+        // 16:30:00 [ERROR] nih_plug::wrapper::util: thread 'unnamed' panicked at 'attempt to add with overflow': crispy_code/src/precise.rs:410
         let offset =
-            (pos_samples as usize) + note_on.note_length_samples + (note_on.timing as usize);
+            (pos_samples + (note_on.note_length_samples as i64) + (note_on.timing as i64)) as usize;
+        //
+        // 	16:34:43 [INFO] crispy_code::precise: >>>>>>>>>>>>>>>>> buf_size 512 note_on.timing 141756
+        // 16:34:43 [INFO] crispy_code::precise: >>>>>>>>>>>>>>>>> pos_samples 512 note_on.timing 141756 note_on.note_length_samples 104727
+        // 16:34:44 [ERROR] nih_plug::wrapper::util: thread 'unnamed' panicked at 'attempt to add with overflow': crispy_code/src/precise.rs:416
+        //
         if let Some(events) = self.future_events.get_mut(&offset) {
             events.push(PreciseEventType::Note(SimpleNoteEvent {
                 note_type: NoteType::Off,
@@ -404,12 +430,6 @@ impl PrecisePattern {
                 velocity: 0.0,
                 note_length_samples: 0 as usize,
             }));
-            // events.push(PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
-            //     timing: note_off_timing,
-            //     voice_id: note_on.voice_id,
-            //     channel: note_on.channel,
-            //     note: note_on.note,
-            // }));
         } else {
             println!(
                 "scheduled note off to happen at sample {} (song_pos_samples = {})",
@@ -472,7 +492,7 @@ mod tests {
     use crate::pattern::{CtrlEvent, Event, EventType, Note, Pattern};
     use crate::precise::{
         compute_extra_samples, NoteType, PreciseEventType, PrecisePattern, SimpleCtrlEvent,
-        SimpleNoteEvent, VoiceTerminatedEvent,
+        SimpleNoteEvent,
     };
     use std::collections::HashMap;
 

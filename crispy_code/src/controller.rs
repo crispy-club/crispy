@@ -71,16 +71,16 @@ impl Controller {
         }
     }
 
-    pub fn clear(&self, np: NamedPattern) {
+    pub fn clear(&self, pattern_name: &str) {
         let mut cmds = self.commands_tx.lock().unwrap();
-        match cmds.push(Command::PatternClear(np.clone().name)) {
+        match cmds.push(Command::PatternClear(pattern_name.to_string())) {
             Ok(_) => {
                 // TODO: status line
-                nih_log!("ran pattern {:?}", np.clone().name)
+                nih_log!("ran pattern {:?}", pattern_name)
             }
             Err(err) => {
                 // TODO: status line
-                nih_log!("error running pattern {:?}: {:?}", np.clone().name, err)
+                nih_log!("error running pattern {:?}: {:?}", pattern_name, err)
             }
         }
     }
@@ -131,12 +131,7 @@ mod tests {
     #[test]
     fn test_controller_clear() {
         let (controller, mut commands_rx) = Controller::new();
-        controller.clear(NamedPattern {
-            channel: 1,
-            events: vec![],
-            length_bars: Dur::new(1, 1),
-            name: String::from("foo"),
-        });
+        controller.clear("foo");
         assert_eq!(
             commands_rx.pop(),
             Ok(Command::PatternClear(String::from("foo")))

@@ -71,11 +71,23 @@ enum Event {
     Other,
 }
 
+struct TextEditorState {
+    selected_char_range: Option<CCursorRange>,
+    text_cursor_range: Option<CursorRange>,
+}
+
+enum TextEditorStateUpdate {
+    CursorPos(usize),
+    Internal,
+    SelectCharRange(CCursorRange),
+}
+
 struct TextEditor {
     contents: String,
     event_history: [Option<(Event, i32)>; 5],
     kill_buffer: Option<String>,
     layout_cache: Option<FrameCache<LayoutJob, SyntaxHighlighter>>,
+    prev_cursor_pos: Option<usize>,
     snippet_anchor: Option<usize>,
 }
 
@@ -86,27 +98,16 @@ impl TextEditor {
             event_history: [None; 5],
             kill_buffer: None,
             layout_cache: None,
+            prev_cursor_pos: None,
             snippet_anchor: None,
         }
     }
 
-    #[cfg(test)]
-    fn from_contents(contents: &str) -> Self {
-        Self {
-            contents: String::from(contents),
-            event_history: [None; 5],
-            kill_buffer: None,
-            layout_cache: None,
-            snippet_anchor: None,
-        }
-    }
-
-    fn abort(&mut self, ctx: &Context) {
-        self.snippet_abort(ctx);
+    fn abort(&mut self, current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
+        self.snippet_abort(current_state)
     }
 
     fn add_to_event_history(&mut self, event: &egui::Event) {
-        nih_log!("event {:?}", event);
         let i_event = Self::internal_event(event);
 
         if i_event == Event::Other {
@@ -123,31 +124,37 @@ impl TextEditor {
         }
     }
 
-    fn back_to_indentation(&mut self, ctx: &Context, cursor_range_opt: Option<CursorRange>) {
-        if let Some(cursor_range) = cursor_range_opt {
-            let cursor_pos = cursor_range.primary.ccursor.index;
-            let buf = self.contents.as_str();
-            let start_idx = match buf[..cursor_pos - 1].rfind("\n") {
-                None => 0,
-                Some(idx) => idx,
-            };
-            let leading_whitespace = get_leading_whitespace(&buf[start_idx..cursor_pos - 1]);
-            if let Some(new_cursor_pos) = start_idx.checked_add(leading_whitespace + 1) {
-                self.set_cursor_pos(ctx, new_cursor_pos);
-            }
-            self.contents.remove(cursor_pos - 1);
-        }
+    fn back_to_indentation(
+        &mut self,
+        current_state: &TextEditorState,
+    ) -> Option<TextEditorStateUpdate> {
+        current_state
+            .text_cursor_range
+            .map(|cursor_range| {
+                let cursor_pos = cursor_range.primary.ccursor.index;
+                let buf = self.contents.as_str();
+                let start_idx = match buf[..cursor_pos - 1].rfind("\n") {
+                    None => 0,
+                    Some(idx) => idx,
+                };
+                let leading_whitespace = get_leading_whitespace(&buf[start_idx..cursor_pos - 1]);
+                self.contents.remove(cursor_pos - 1);
+                start_idx
+                    .checked_add(leading_whitespace + 1)
+                    .map(|new_cursor_pos| TextEditorStateUpdate::CursorPos(new_cursor_pos))
+            })
+            .flatten()
     }
 
-    fn back_word(&mut self, ctx: &Context, cursor_range_opt: Option<CursorRange>) {
-        if let Some(cursor_range) = cursor_range_opt {
-            let cursor_pos = cursor_range.primary.ccursor.index;
-            if let Some(new_cursor_pos) =
+    fn back_word(&mut self, current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
+        current_state
+            .text_cursor_range
+            .map(|cursor_range| {
+                let cursor_pos = cursor_range.primary.ccursor.index;
                 find_prev_word_beginning(self.contents.as_str(), cursor_pos)
-            {
-                self.set_cursor_pos(ctx, new_cursor_pos);
-            }
-        }
+                    .map(|new_cursor_pos| TextEditorStateUpdate::CursorPos(new_cursor_pos))
+            })
+            .flatten()
     }
 
     fn clear_events(&mut self, idx: i32) {
@@ -157,31 +164,32 @@ impl TextEditor {
         }
     }
 
-    fn char_range(ctx: &Context) -> Option<CCursorRange> {
-        if let Some(state) = TextEdit::load_state(ctx, EDITOR_ID.into()) {
-            return state.cursor.char_range();
-        }
-        None
+    fn forward_word(&mut self, current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
+        current_state
+            .text_cursor_range
+            .map(|cursor_range| {
+                let cursor_pos = cursor_range.primary.ccursor.index;
+                find_next_word_beginning(self.contents.as_str(), cursor_pos)
+                    .map(|new_cursor_pos| TextEditorStateUpdate::CursorPos(new_cursor_pos))
+            })
+            .flatten()
     }
 
-    fn forward_word(&mut self, ctx: &Context, cursor_range_opt: Option<CursorRange>) {
-        if let Some(cursor_range) = cursor_range_opt {
-            let cursor_pos = cursor_range.primary.ccursor.index;
-            if let Some(new_cursor_pos) =
-                find_next_word_beginning(self.contents.as_str(), cursor_pos)
-            {
-                self.set_cursor_pos(ctx, new_cursor_pos);
+    fn has_events(&self) -> bool {
+        for opt in &self.event_history {
+            if opt.is_some() {
+                return true;
             }
         }
+        false
     }
 
-    fn handle_event_history(
+    fn handle_event_history3(
         &mut self,
-        ctx: &Context,
-        scripting_engine: Arc<Mutex<Engine>>,
-        cursor_range_opt: Option<CursorRange>,
-    ) {
-        match (
+        _scripting_engine: &Arc<Mutex<Engine>>,
+        current_state: &TextEditorState,
+    ) -> Option<TextEditorStateUpdate> {
+        let state_update = match (
             self.event_history[2],
             self.event_history[1],
             self.event_history[0],
@@ -190,99 +198,110 @@ impl TextEditor {
                 Some((Event::KeySpaceBar, _)),
                 Some((Event::KeyOpenCurly, 1)),
                 Some((Event::KeyEnter, 1)),
-            ) => {
-                self.indent_cursor(ctx, cursor_range_opt);
-                self.clear_events(3)
-            }
-            _ => {}
+            ) => self.indent_cursor(current_state),
+            _ => None,
+        };
+        if state_update.is_some() {
+            self.clear_events(3);
         }
-        match (self.event_history[1], self.event_history[0]) {
-            (Some((Event::KeyClosedCurly, 1)), Some((Event::KeyEnter, 1))) => {
-                self.outdent_closed_curly();
-                self.clear_events(2)
-            }
-            _ => {}
-        }
-        match self.event_history[0] {
-            Some((Event::KeyEnter, 1)) => {
-                self.indent_to_match_previous_line(ctx, cursor_range_opt);
-                self.clear_events(1)
-            }
-            Some((Event::Abort, _)) => {
-                self.abort(ctx);
-                self.clear_events(1)
-            }
-            Some((Event::Kill, _)) => {
-                self.kill(cursor_range_opt);
-                self.clear_events(1)
-            }
-            Some((Event::Yank, _)) => {
-                self.yank(ctx, cursor_range_opt);
-                self.clear_events(1)
-            }
-            Some((Event::BackToIndentation, _)) => {
-                self.back_to_indentation(ctx, cursor_range_opt);
-                self.clear_events(1)
-            }
-            Some((Event::BackWord, _)) => {
-                self.back_word(ctx, cursor_range_opt);
-                self.clear_events(1)
-            }
-            Some((Event::ForwardWord, _)) => {
-                self.forward_word(ctx, cursor_range_opt);
-                self.clear_events(1)
-            }
-            Some((Event::Snippet, _)) => {
-                self.snippet(cursor_range_opt);
-                self.clear_events(1)
-            }
-            Some((Event::SnippetSend, _)) => {
-                self.snippet_send(ctx, scripting_engine);
-                self.clear_events(1)
-            }
-            _ => {}
-        }
+        state_update
     }
 
-    fn indent_cursor(&mut self, ctx: &Context, cursor_range_opt: Option<CursorRange>) {
-        if let Some(cursor_range) = cursor_range_opt {
-            let cursor_pos = cursor_range.primary.ccursor.index;
-            self.contents
-                .push_str(" ".repeat(INDENT_SPACES as usize).as_str());
-            if let Some(new_cursor_pos) = cursor_pos.checked_add(INDENT_SPACES as usize) {
-                self.set_cursor_pos(ctx, new_cursor_pos);
+    fn handle_event_history2(
+        &mut self,
+        _scripting_engine: &Arc<Mutex<Engine>>,
+        _current_state: &TextEditorState,
+    ) -> Option<TextEditorStateUpdate> {
+        let state_update = match (self.event_history[1], self.event_history[0]) {
+            (Some((Event::KeyClosedCurly, 1)), Some((Event::KeyEnter, 1))) => {
+                self.outdent_closed_curly()
             }
+            _ => None,
+        };
+        if state_update.is_some() {
+            self.clear_events(2);
         }
+        state_update
+    }
+
+    fn handle_event_history1(
+        &mut self,
+        scripting_engine: &Arc<Mutex<Engine>>,
+        current_state: &TextEditorState,
+    ) -> Option<TextEditorStateUpdate> {
+        let state_update = match self.event_history[0] {
+            Some((Event::KeyEnter, 1)) => self.indent_to_match_previous_line(current_state),
+            Some((Event::Abort, _)) => self.abort(current_state),
+            Some((Event::Kill, _)) => self.kill(current_state),
+            Some((Event::Yank, _)) => self.yank(current_state),
+            Some((Event::BackToIndentation, _)) => self.back_to_indentation(current_state),
+            Some((Event::BackWord, _)) => self.back_word(current_state),
+            Some((Event::ForwardWord, _)) => self.forward_word(current_state),
+            Some((Event::Snippet, _)) => self.snippet(current_state),
+            Some((Event::SnippetSend, _)) => self.snippet_send(current_state, scripting_engine),
+            _ => None,
+        };
+        if state_update.is_some() {
+            self.clear_events(1);
+        }
+        state_update
+    }
+
+    fn handle_event_history(
+        &mut self,
+        scripting_engine: &Arc<Mutex<Engine>>,
+        current_state: &TextEditorState,
+    ) -> Option<TextEditorStateUpdate> {
+        if let Some(state_update) = self.handle_event_history3(scripting_engine, current_state) {
+            return Some(state_update);
+        }
+        if let Some(state_update) = self.handle_event_history2(scripting_engine, current_state) {
+            return Some(state_update);
+        }
+        if let Some(state_update) = self.handle_event_history1(scripting_engine, current_state) {
+            return Some(state_update);
+        }
+        None
+    }
+
+    fn indent_cursor(&mut self, current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
+        current_state
+            .text_cursor_range
+            .map(|cursor_range| {
+                let cursor_pos = cursor_range.primary.ccursor.index;
+                self.contents
+                    .push_str(" ".repeat(INDENT_SPACES as usize).as_str());
+                cursor_pos
+                    .checked_add(INDENT_SPACES as usize)
+                    .map(|new_cursor_pos| TextEditorStateUpdate::CursorPos(new_cursor_pos))
+            })
+            .flatten()
     }
 
     fn indent_to_match_previous_line(
         &mut self,
-        ctx: &Context,
-        cursor_range_opt: Option<CursorRange>,
-    ) {
+        current_state: &TextEditorState,
+    ) -> Option<TextEditorStateUpdate> {
         let lines: Vec<&str> = self.contents.as_str().lines().collect();
         if lines.len() < 2 {
-            return;
+            return None;
         }
         let previous_line = lines[lines.len() - 1];
         let previous_line_spaces = get_leading_whitespace(previous_line);
         if previous_line_spaces == 0 {
-            return;
+            return None;
         }
-        if let Some(cursor_range) = cursor_range_opt {
-            let cursor_pos = cursor_range.primary.ccursor.index;
-            if let Some(new_cursor_pos) = cursor_pos.checked_add(previous_line_spaces as usize) {
-                if let Some(mut state) = TextEdit::load_state(ctx, EDITOR_ID.into()) {
-                    self.contents
-                        .push_str(" ".repeat(previous_line_spaces as usize).as_str());
-                    let ccursor = CCursor::new(new_cursor_pos);
-                    state
-                        .cursor
-                        .set_char_range(Some(CCursorRange::one(ccursor)));
-                    state.store(ctx, EDITOR_ID.into());
-                }
-            }
-        }
+        current_state
+            .text_cursor_range
+            .map(|cursor_range| {
+                let cursor_pos = cursor_range.primary.ccursor.index;
+                self.contents
+                    .push_str(" ".repeat(previous_line_spaces as usize).as_str());
+                cursor_pos
+                    .checked_add(previous_line_spaces as usize)
+                    .map(|new_cursor_pos| TextEditorStateUpdate::CursorPos(new_cursor_pos))
+            })
+            .flatten()
     }
 
     fn internal_event(event: &egui::Event) -> Event {
@@ -318,8 +337,8 @@ impl TextEditor {
         }
     }
 
-    fn kill(&mut self, cursor_range_opt: Option<CursorRange>) {
-        if let Some(cursor_range) = cursor_range_opt {
+    fn kill(&mut self, current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
+        current_state.text_cursor_range.map(|cursor_range| {
             let start_idx = cursor_range.primary.ccursor.index;
             let buf = self.contents.as_str();
             let end_idx = match buf[start_idx..].find("\n") {
@@ -332,32 +351,28 @@ impl TextEditor {
             } else {
                 nih_log!("end_idx ({:?}) <= start_idx ({:?})", end_idx, start_idx);
             }
-        } else {
-            nih_log!("output.cursor_range is None");
-        }
+            TextEditorStateUpdate::Internal
+        })
     }
 
-    fn outdent_closed_curly(&mut self) {
+    fn outdent_closed_curly(&mut self) -> Option<TextEditorStateUpdate> {
         let mut lines: Vec<&str> = self.contents.as_str().lines().collect();
         let num_lines = lines.len();
         if num_lines < 2 {
-            return;
+            return None;
         }
         let previous_line = lines[num_lines - 1];
         nih_log!("previous line -> {:?}", previous_line);
         let previous_line_spaces = get_leading_whitespace(previous_line);
         if previous_line_spaces < INDENT_SPACES as usize {
-            return;
+            return None;
         }
         let indent_spaces = previous_line_spaces - INDENT_SPACES as usize;
         let replacement = " ".repeat(indent_spaces) + "}\n";
         lines[num_lines - 1] = replacement.as_str();
         self.contents = lines.join("\n");
-        if indent_spaces == 0 {
-            // Edit previous line.
-            return;
-        }
         // TODO: nested blocks
+        Some(TextEditorStateUpdate::Internal)
     }
 
     fn prepend_event(&mut self, i_event: Event) {
@@ -365,23 +380,6 @@ impl TextEditor {
             self.event_history[idx] = self.event_history[idx - 1];
         }
         self.event_history[0] = Some((i_event, 1));
-    }
-
-    fn set_char_range(ctx: &Context, range: CCursorRange) {
-        if let Some(mut state) = TextEdit::load_state(ctx, EDITOR_ID.into()) {
-            state.cursor.set_char_range(Some(range));
-            state.store(ctx, EDITOR_ID.into());
-        }
-    }
-
-    fn set_cursor_pos(&self, ctx: &Context, new_cursor_pos: usize) {
-        if let Some(mut state) = TextEditState::load(ctx, EDITOR_ID.into()) {
-            let ccursor = CCursor::new(new_cursor_pos);
-            state
-                .cursor
-                .set_char_range(Some(CCursorRange::one(ccursor)));
-            state.store(ctx, EDITOR_ID.into());
-        }
     }
 
     fn show(&mut self, ui: &mut Ui, scripting_engine: Arc<Mutex<Engine>>) {
@@ -402,91 +400,145 @@ impl TextEditor {
             .min_size(ui.available_size())
             .show(ui);
 
-        let mut got_events = false;
         ui.input(|i| {
             for event in &i.events {
                 self.add_to_event_history(event);
             }
-            got_events = i.events.len() > 0;
         });
-        if got_events {
-            // Note that egui crashes if we call handle_event_history in the
-            // ui.input callback above.
-            self.handle_event_history(ui.ctx(), scripting_engine, output.cursor_range);
-            self.snippet_highlight(ui.ctx());
+        let egui_state = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()).unwrap();
+        let current_state = TextEditorState {
+            selected_char_range: egui_state.cursor.char_range(),
+            text_cursor_range: output.cursor_range,
+        };
+        let state_update = self.handle_event_history(&scripting_engine, &current_state);
+        self.update_state(ui.ctx(), state_update);
+
+        if let Some(curr_cursor_range) = output.cursor_range {
+            if let Some(prev_cursor_pos) = self.prev_cursor_pos {
+                if curr_cursor_range.primary.ccursor.index != prev_cursor_pos {
+                    nih_log!(
+                        "cursor position changed from {:?} to {:?}",
+                        prev_cursor_pos,
+                        curr_cursor_range.primary.ccursor.index
+                    );
+                }
+            }
+            self.prev_cursor_pos = Some(curr_cursor_range.primary.ccursor.index);
         }
+        let another_state_update = self.snippet_highlight(&current_state);
+        self.update_state(ui.ctx(), another_state_update);
     }
 
-    fn snippet(&mut self, cursor_range_opt: Option<CursorRange>) {
-        if let Some(cursor_range) = cursor_range_opt {
+    fn snippet(&mut self, current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
+        current_state.text_cursor_range.map(|cursor_range| {
             self.snippet_anchor = Some(cursor_range.primary.ccursor.index);
-        }
+            TextEditorStateUpdate::Internal
+        })
     }
 
-    fn snippet_abort(&mut self, ctx: &Context) {
-        if let Some(curr_char_range) = TextEditor::char_range(ctx) {
-            TextEditor::set_char_range(ctx, CCursorRange::one(curr_char_range.primary));
-        }
+    fn snippet_abort(&mut self, _current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
         self.snippet_anchor = None;
+        Some(TextEditorStateUpdate::Internal)
     }
 
-    fn snippet_send(&mut self, ctx: &Context, scripting_engine: Arc<Mutex<Engine>>) {
+    fn snippet_highlight(
+        &mut self,
+        current_state: &TextEditorState,
+    ) -> Option<TextEditorStateUpdate> {
+        if self.snippet_anchor.is_none() {
+            return current_state
+                .selected_char_range
+                .map(|char_range| {
+                    let cursor_pos = char_range.primary.index;
+                    Some(TextEditorStateUpdate::SelectCharRange(CCursorRange::one(
+                        CCursor::new(cursor_pos),
+                    )))
+                })
+                .flatten();
+        }
+        let anchor = self.snippet_anchor.unwrap();
+
+        if let Some(char_range) = current_state.selected_char_range {
+            let cursor_pos = char_range.primary.index;
+            if anchor == cursor_pos {
+                return None;
+            }
+            let (start, end) = if anchor < cursor_pos {
+                (CCursor::new(anchor), CCursor::new(cursor_pos))
+            } else {
+                (CCursor::new(cursor_pos), CCursor::new(anchor))
+            };
+            return Some(TextEditorStateUpdate::SelectCharRange(CCursorRange::two(
+                start, end,
+            )));
+        }
+        None
+    }
+
+    fn snippet_send(
+        &mut self,
+        current_state: &TextEditorState,
+        scripting_engine: &Arc<Mutex<Engine>>,
+    ) -> Option<TextEditorStateUpdate> {
         let anchor = self.snippet_anchor.unwrap();
         let mut scope = Scope::new();
 
-        if let Some(char_range) = TextEditor::char_range(ctx) {
-            let cursor_pos = char_range.primary.index;
-            if anchor == cursor_pos {
-                return;
-            }
-            let (start, end) = if anchor < cursor_pos {
-                (CCursor::new(anchor), CCursor::new(cursor_pos))
-            } else {
-                (CCursor::new(cursor_pos), CCursor::new(anchor))
-            };
-            let engine = scripting_engine.lock().unwrap();
-            let snippet_contents = &self.contents.as_str()[start.index..end.index];
+        current_state
+            .selected_char_range
+            .map(|char_range| {
+                let cursor_pos = char_range.primary.index;
+                if anchor == cursor_pos {
+                    return None;
+                }
+                self.snippet_abort(current_state);
 
-            if let Err(err) = engine.run_with_scope(&mut scope, &snippet_contents) {
-                nih_log!("error executing snippet contents: {:?}", err);
-            } else {
-                nih_log!("executed snippet contents: {:?}", snippet_contents);
-            }
-        }
-        self.snippet_abort(ctx);
+                let (start, end) = if anchor < cursor_pos {
+                    (CCursor::new(anchor), CCursor::new(cursor_pos))
+                } else {
+                    (CCursor::new(cursor_pos), CCursor::new(anchor))
+                };
+                let engine = scripting_engine.lock().unwrap();
+                let snippet_contents = &self.contents.as_str()[start.index..end.index];
+
+                if let Err(err) = engine.run_with_scope(&mut scope, &snippet_contents) {
+                    nih_log!("error executing snippet contents: {:?}", err);
+                } else {
+                    nih_log!("executed snippet contents: {:?}", snippet_contents);
+                }
+                Some(TextEditorStateUpdate::Internal)
+            })
+            .flatten()
     }
 
-    fn snippet_highlight(&mut self, ctx: &Context) {
-        if self.snippet_anchor.is_none() {
-            return;
-        }
-        let anchor = self.snippet_anchor.unwrap();
-        if let Some(char_range) = TextEditor::char_range(ctx) {
-            let cursor_pos = char_range.primary.index;
-            if anchor == cursor_pos {
-                return;
+    fn update_state(&mut self, ctx: &Context, state_update: Option<TextEditorStateUpdate>) {
+        if let Some(mut state) = TextEditState::load(ctx, EDITOR_ID.into()) {
+            match state_update {
+                Some(TextEditorStateUpdate::SelectCharRange(new_selected_char_range)) => {
+                    state.cursor.set_char_range(Some(new_selected_char_range));
+                }
+                Some(TextEditorStateUpdate::CursorPos(new_text_cursor_pos)) => {
+                    state
+                        .cursor
+                        .set_char_range(Some(CCursorRange::one(CCursor::new(new_text_cursor_pos))));
+                }
+                _ => {}
             }
-            let (start, end) = if anchor < cursor_pos {
-                (CCursor::new(anchor), CCursor::new(cursor_pos))
-            } else {
-                (CCursor::new(cursor_pos), CCursor::new(anchor))
-            };
-            TextEditor::set_char_range(ctx, CCursorRange::two(start, end));
+            state.store(ctx, EDITOR_ID.into());
         }
     }
 
-    fn yank(&mut self, ctx: &Context, cursor_range_opt: Option<CursorRange>) {
-        if self.kill_buffer.is_none() {
-            return;
-        }
-        if let Some(buf) = &self.kill_buffer {
-            let kb_size = buf.len();
-            if let Some(cursor_range) = cursor_range_opt {
-                let start_idx = cursor_range.primary.ccursor.index;
-                self.contents.insert_str(start_idx, buf.as_str());
-                self.set_cursor_pos(ctx, kb_size + start_idx);
-            }
-        }
+    fn yank(&mut self, current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
+        self.kill_buffer
+            .as_ref()
+            .map(|buf| {
+                let kb_size = buf.len();
+                current_state.text_cursor_range.map(|cursor_range| {
+                    let start_idx = cursor_range.primary.ccursor.index;
+                    self.contents.insert_str(start_idx, buf.as_str());
+                    TextEditorStateUpdate::CursorPos(kb_size + start_idx)
+                })
+            })
+            .flatten()
     }
 }
 
@@ -623,12 +675,7 @@ mod test {
     use crate::controller::Controller;
     use crate::editor::*;
     use logos::Logos;
-    use nih_plug_egui::egui::{
-        self,
-        epaint::text::cursor::{CCursor, Cursor, PCursor, RCursor},
-        widgets::text_edit::TextEditState,
-        Color32, Context, FontId,
-    };
+    use nih_plug_egui::egui;
     use rhai_rowan::parser::Parser;
     use rhai_rowan::syntax::SyntaxKind;
 

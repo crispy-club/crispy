@@ -2,7 +2,7 @@ use crispy_code::controller::Command;
 use crispy_code::dsl::notes;
 use crispy_code::plugin::Code;
 use crispy_code::plugin_export::Context;
-use crispy_code::precise::{NoteType, PreciseEventType, SimpleNoteEvent, VoiceTerminatedEvent};
+use crispy_code::precise::{NoteType, PreciseEventType, SimpleNoteEvent};
 use nih_plug::prelude::*;
 use std::collections::HashMap;
 
