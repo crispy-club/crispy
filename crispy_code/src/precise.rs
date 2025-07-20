@@ -314,14 +314,14 @@ impl PrecisePattern {
                                         velocity: nev.velocity,
                                         note_length_samples: nev.note_length_samples,
                                     }));
-                                    selected_events.push(PreciseEventType::VoiceTerminated(
-                                        VoiceTerminatedEvent {
-                                            timing: timing,
-                                            voice_id: Some(vid),
-                                            channel: nev.channel,
-                                            note: nev.note,
-                                        },
-                                    ));
+                                    // selected_events.push(PreciseEventType::VoiceTerminated(
+                                    //     VoiceTerminatedEvent {
+                                    //         timing: timing,
+                                    //         voice_id: Some(vid),
+                                    //         channel: nev.channel,
+                                    //         note: nev.note,
+                                    //     },
+                                    // ));
                                 }
                             }
                             NoteType::On => {
@@ -404,12 +404,12 @@ impl PrecisePattern {
                 velocity: 0.0,
                 note_length_samples: 0 as usize,
             }));
-            events.push(PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
-                timing: note_off_timing,
-                voice_id: note_on.voice_id,
-                channel: note_on.channel,
-                note: note_on.note,
-            }));
+            // events.push(PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
+            //     timing: note_off_timing,
+            //     voice_id: note_on.voice_id,
+            //     channel: note_on.channel,
+            //     note: note_on.note,
+            // }));
         } else {
             println!(
                 "scheduled note off to happen at sample {} (song_pos_samples = {})",
@@ -427,12 +427,12 @@ impl PrecisePattern {
                         velocity: 0.0,
                         note_length_samples: 0 as usize,
                     }),
-                    PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
-                        timing: note_off_timing,
-                        voice_id: note_on.voice_id,
-                        channel: note_on.channel,
-                        note: note_on.note,
-                    }),
+                    // PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
+                    //     timing: note_off_timing,
+                    //     voice_id: note_on.voice_id,
+                    //     channel: note_on.channel,
+                    //     note: note_on.note,
+                    // }),
                 ],
             );
         }
@@ -594,12 +594,12 @@ mod tests {
                         velocity: 0.0,
                         note_length_samples: 0 as usize, // FIXME
                     }),
-                    PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
-                        timing: 145,
-                        voice_id: Some(0),
-                        channel: 1,
-                        note: 60,
-                    }),
+                    // PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
+                    //     timing: 145,
+                    //     voice_id: Some(0),
+                    //     channel: 1,
+                    //     note: 60,
+                    // }),
                 ],
             ),
             (
@@ -626,12 +626,12 @@ mod tests {
                         velocity: 0.0,
                         note_length_samples: 0 as usize, // FIXME
                     }),
-                    PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
-                        timing: 215,
-                        voice_id: Some(1),
-                        channel: 1,
-                        note: 96,
-                    }),
+                    // PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
+                    //     timing: 215,
+                    //     voice_id: Some(1),
+                    //     channel: 1,
+                    //     note: 96,
+                    // }),
                 ],
             ),
             // Add this last one to see how the code behaves when the pattern loops.
@@ -766,12 +766,12 @@ mod tests {
                         velocity: 0.0,
                         note_length_samples: 0 as usize, // FIXME
                     }),
-                    PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
-                        timing: 22, // sample pos 104726
-                        voice_id: Some(0),
-                        channel: 1,
-                        note: 60,
-                    }),
+                    // PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
+                    //     timing: 22, // sample pos 104726
+                    //     voice_id: Some(0),
+                    //     channel: 1,
+                    //     note: 60,
+                    // }),
                 ],
             ),
             (
@@ -795,12 +795,12 @@ mod tests {
                         velocity: 0.0,
                         note_length_samples: 0 as usize, // FIXME
                     }),
-                    PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
-                        timing: 162, // sample pos 157090
-                        voice_id: Some(1),
-                        channel: 1,
-                        note: 96,
-                    }),
+                    // PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
+                    //     timing: 162, // sample pos 157090
+                    //     voice_id: Some(1),
+                    //     channel: 1,
+                    //     note: 96,
+                    // }),
                 ],
             ),
         ]);

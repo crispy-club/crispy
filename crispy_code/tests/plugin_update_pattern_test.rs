@@ -141,12 +141,12 @@ fn test_plugin_pattern_update() -> Result<(), String> {
                             velocity: 0.0,
                             note_length_samples: 0 as usize,
                         }),
-                        PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
-                            timing: 192,
-                            channel: 1,
-                            voice_id: Some(0),
-                            note: 60,
-                        }),
+                        // PreciseEventType::VoiceTerminated(VoiceTerminatedEvent {
+                        //     timing: 192,
+                        //     channel: 1,
+                        //     voice_id: Some(0),
+                        //     note: 60,
+                        // }),
                     ],
                     exp_status: ProcessStatus::Normal,
                 },
