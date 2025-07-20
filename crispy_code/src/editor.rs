@@ -73,11 +73,9 @@ enum Event {
 
 struct TextEditorState {
     selected_char_range: Option<CCursorRange>,
-    text_cursor_range: Option<CursorRange>,
 }
 
 enum TextEditorStateUpdate {
-    CursorPos(usize),
     Internal,
     SelectCharRange(CCursorRange),
 }
@@ -87,7 +85,6 @@ struct TextEditor {
     event_history: [Option<(Event, i32)>; 5],
     kill_buffer: Option<String>,
     layout_cache: Option<FrameCache<LayoutJob, SyntaxHighlighter>>,
-    prev_cursor_pos: Option<usize>,
     snippet_anchor: Option<usize>,
 }
 
@@ -98,7 +95,6 @@ impl TextEditor {
             event_history: [None; 5],
             kill_buffer: None,
             layout_cache: None,
-            prev_cursor_pos: None,
             snippet_anchor: None,
         }
     }
@@ -129,9 +125,9 @@ impl TextEditor {
         current_state: &TextEditorState,
     ) -> Option<TextEditorStateUpdate> {
         current_state
-            .text_cursor_range
-            .map(|cursor_range| {
-                let cursor_pos = cursor_range.primary.ccursor.index;
+            .selected_char_range
+            .map(|char_range| {
+                let cursor_pos = char_range.primary.index;
                 let buf = self.contents.as_str();
                 let start_idx = match buf[..cursor_pos - 1].rfind("\n") {
                     None => 0,
@@ -141,18 +137,21 @@ impl TextEditor {
                 self.contents.remove(cursor_pos - 1);
                 start_idx
                     .checked_add(leading_whitespace + 1)
-                    .map(|new_cursor_pos| TextEditorStateUpdate::CursorPos(new_cursor_pos))
+                    .map(|new_cursor_pos| {
+                        TextEditorStateUpdate::SelectCharRange(self.get_char_range(new_cursor_pos))
+                    })
             })
             .flatten()
     }
 
     fn back_word(&mut self, current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
         current_state
-            .text_cursor_range
-            .map(|cursor_range| {
-                let cursor_pos = cursor_range.primary.ccursor.index;
-                find_prev_word_beginning(self.contents.as_str(), cursor_pos)
-                    .map(|new_cursor_pos| TextEditorStateUpdate::CursorPos(new_cursor_pos))
+            .selected_char_range
+            .map(|char_range| {
+                let cursor_pos = char_range.primary.index;
+                find_prev_word_beginning(self.contents.as_str(), cursor_pos).map(|new_cursor_pos| {
+                    TextEditorStateUpdate::SelectCharRange(self.get_char_range(new_cursor_pos))
+                })
             })
             .flatten()
     }
@@ -166,22 +165,31 @@ impl TextEditor {
 
     fn forward_word(&mut self, current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
         current_state
-            .text_cursor_range
-            .map(|cursor_range| {
-                let cursor_pos = cursor_range.primary.ccursor.index;
-                find_next_word_beginning(self.contents.as_str(), cursor_pos)
-                    .map(|new_cursor_pos| TextEditorStateUpdate::CursorPos(new_cursor_pos))
+            .selected_char_range
+            .map(|char_range| {
+                let cursor_pos = char_range.primary.index;
+                find_next_word_beginning(self.contents.as_str(), cursor_pos).map(|new_cursor_pos| {
+                    TextEditorStateUpdate::SelectCharRange(self.get_char_range(new_cursor_pos))
+                })
             })
             .flatten()
     }
 
-    fn has_events(&self) -> bool {
-        for opt in &self.event_history {
-            if opt.is_some() {
-                return true;
+    fn get_char_range(&mut self, new_cursor_pos: usize) -> CCursorRange {
+        match self.snippet_anchor {
+            None => CCursorRange::one(CCursor::new(new_cursor_pos)),
+            Some(anchor) if anchor == new_cursor_pos => {
+                CCursorRange::one(CCursor::new(new_cursor_pos))
+            }
+            Some(anchor) => {
+                let (start, end) = if anchor < new_cursor_pos {
+                    (CCursor::new(anchor), CCursor::new(new_cursor_pos))
+                } else {
+                    (CCursor::new(new_cursor_pos), CCursor::new(anchor))
+                };
+                CCursorRange::two(start, end)
             }
         }
-        false
     }
 
     fn handle_event_history3(
@@ -266,14 +274,16 @@ impl TextEditor {
 
     fn indent_cursor(&mut self, current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
         current_state
-            .text_cursor_range
-            .map(|cursor_range| {
-                let cursor_pos = cursor_range.primary.ccursor.index;
+            .selected_char_range
+            .map(|char_range| {
+                let cursor_pos = char_range.primary.index;
                 self.contents
                     .push_str(" ".repeat(INDENT_SPACES as usize).as_str());
                 cursor_pos
                     .checked_add(INDENT_SPACES as usize)
-                    .map(|new_cursor_pos| TextEditorStateUpdate::CursorPos(new_cursor_pos))
+                    .map(|new_cursor_pos| {
+                        TextEditorStateUpdate::SelectCharRange(self.get_char_range(new_cursor_pos))
+                    })
             })
             .flatten()
     }
@@ -292,14 +302,16 @@ impl TextEditor {
             return None;
         }
         current_state
-            .text_cursor_range
-            .map(|cursor_range| {
-                let cursor_pos = cursor_range.primary.ccursor.index;
+            .selected_char_range
+            .map(|char_range| {
+                let cursor_pos = char_range.primary.index;
                 self.contents
                     .push_str(" ".repeat(previous_line_spaces as usize).as_str());
                 cursor_pos
                     .checked_add(previous_line_spaces as usize)
-                    .map(|new_cursor_pos| TextEditorStateUpdate::CursorPos(new_cursor_pos))
+                    .map(|new_cursor_pos| {
+                        TextEditorStateUpdate::SelectCharRange(self.get_char_range(new_cursor_pos))
+                    })
             })
             .flatten()
     }
@@ -338,8 +350,8 @@ impl TextEditor {
     }
 
     fn kill(&mut self, current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
-        current_state.text_cursor_range.map(|cursor_range| {
-            let start_idx = cursor_range.primary.ccursor.index;
+        current_state.selected_char_range.map(|char_range| {
+            let start_idx = char_range.primary.index;
             let buf = self.contents.as_str();
             let end_idx = match buf[start_idx..].find("\n") {
                 None => self.contents.len(),
@@ -408,30 +420,15 @@ impl TextEditor {
         let egui_state = TextEdit::load_state(ui.ctx(), EDITOR_ID.into()).unwrap();
         let current_state = TextEditorState {
             selected_char_range: egui_state.cursor.char_range(),
-            text_cursor_range: output.cursor_range,
         };
         let state_update = self.handle_event_history(&scripting_engine, &current_state);
-        self.update_state(ui.ctx(), state_update);
-
-        if let Some(curr_cursor_range) = output.cursor_range {
-            if let Some(prev_cursor_pos) = self.prev_cursor_pos {
-                if curr_cursor_range.primary.ccursor.index != prev_cursor_pos {
-                    nih_log!(
-                        "cursor position changed from {:?} to {:?}",
-                        prev_cursor_pos,
-                        curr_cursor_range.primary.ccursor.index
-                    );
-                }
-            }
-            self.prev_cursor_pos = Some(curr_cursor_range.primary.ccursor.index);
-        }
-        let another_state_update = self.snippet_highlight(&current_state);
-        self.update_state(ui.ctx(), another_state_update);
+        self.update_state(ui.ctx(), &state_update);
     }
 
     fn snippet(&mut self, current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
-        current_state.text_cursor_range.map(|cursor_range| {
-            self.snippet_anchor = Some(cursor_range.primary.ccursor.index);
+        current_state.selected_char_range.map(|char_range| {
+            nih_log!("set snippet anchor -> {:?}", char_range.primary.index);
+            self.snippet_anchor = Some(char_range.primary.index);
             TextEditorStateUpdate::Internal
         })
     }
@@ -439,40 +436,6 @@ impl TextEditor {
     fn snippet_abort(&mut self, _current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
         self.snippet_anchor = None;
         Some(TextEditorStateUpdate::Internal)
-    }
-
-    fn snippet_highlight(
-        &mut self,
-        current_state: &TextEditorState,
-    ) -> Option<TextEditorStateUpdate> {
-        if self.snippet_anchor.is_none() {
-            return current_state
-                .selected_char_range
-                .map(|char_range| {
-                    let cursor_pos = char_range.primary.index;
-                    Some(TextEditorStateUpdate::SelectCharRange(CCursorRange::one(
-                        CCursor::new(cursor_pos),
-                    )))
-                })
-                .flatten();
-        }
-        let anchor = self.snippet_anchor.unwrap();
-
-        if let Some(char_range) = current_state.selected_char_range {
-            let cursor_pos = char_range.primary.index;
-            if anchor == cursor_pos {
-                return None;
-            }
-            let (start, end) = if anchor < cursor_pos {
-                (CCursor::new(anchor), CCursor::new(cursor_pos))
-            } else {
-                (CCursor::new(cursor_pos), CCursor::new(anchor))
-            };
-            return Some(TextEditorStateUpdate::SelectCharRange(CCursorRange::two(
-                start, end,
-            )));
-        }
-        None
     }
 
     fn snippet_send(
@@ -510,32 +473,40 @@ impl TextEditor {
             .flatten()
     }
 
-    fn update_state(&mut self, ctx: &Context, state_update: Option<TextEditorStateUpdate>) {
+    fn update_state(&mut self, ctx: &Context, state_update: &Option<TextEditorStateUpdate>) {
         if let Some(mut state) = TextEditState::load(ctx, EDITOR_ID.into()) {
             match state_update {
                 Some(TextEditorStateUpdate::SelectCharRange(new_selected_char_range)) => {
-                    state.cursor.set_char_range(Some(new_selected_char_range));
+                    // Manually set the char range.
+                    state.cursor.set_char_range(Some(*new_selected_char_range));
                 }
-                Some(TextEditorStateUpdate::CursorPos(new_text_cursor_pos)) => {
-                    state
-                        .cursor
-                        .set_char_range(Some(CCursorRange::one(CCursor::new(new_text_cursor_pos))));
-                }
-                _ => {}
+                _ => match self.snippet_anchor {
+                    Some(anchor) => match state.cursor.char_range() {
+                        Some(char_range) => {
+                            state.cursor.set_char_range(Some(
+                                self.get_char_range(char_range.primary.index),
+                            ));
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                },
             }
             state.store(ctx, EDITOR_ID.into());
         }
     }
 
     fn yank(&mut self, current_state: &TextEditorState) -> Option<TextEditorStateUpdate> {
-        self.kill_buffer
-            .as_ref()
+        let kill_buffer = self.kill_buffer.as_ref();
+
+        kill_buffer
             .map(|buf| {
                 let kb_size = buf.len();
-                current_state.text_cursor_range.map(|cursor_range| {
-                    let start_idx = cursor_range.primary.ccursor.index;
+                current_state.selected_char_range.map(|char_range| {
+                    let start_idx = char_range.primary.index;
                     self.contents.insert_str(start_idx, buf.as_str());
-                    TextEditorStateUpdate::CursorPos(kb_size + start_idx)
+                    // TextEditorStateUpdate::SelectCharRange(self.get_char_range(kb_size + start_idx))
+                    TextEditorStateUpdate::Internal
                 })
             })
             .flatten()
