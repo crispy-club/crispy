@@ -1,5 +1,5 @@
 [project]
-name = "live"
+name = "crispy"
 version = "0.1.0"
 description = "Python package for improvising music with code"
 readme = "README.md"
