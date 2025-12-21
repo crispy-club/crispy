@@ -4,8 +4,8 @@ from typing import Any
 
 import requests
 
-from crispy.base_types import PluginPattern, Zero
-from crispy.filters import name
+from crispy_code.base_types import PluginPattern, Zero
+from crispy_code.filters import name
 
 
 @dataclass(slots=True)

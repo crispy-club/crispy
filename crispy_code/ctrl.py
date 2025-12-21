@@ -2,10 +2,10 @@ import itertools
 from dataclasses import dataclass
 from typing import Iterable
 
-from crispy.base_types import Bar, Ctrl, Duration, Event, PluginPattern, Sixteenth
-from crispy.filters import name
-from crispy.plugin import play
-from crispy.util import random_name
+from crispy_code.base_types import Bar, Ctrl, Duration, Event, PluginPattern, Sixteenth
+from crispy_code.filters import name
+from crispy_code.plugin import play
+from crispy_code.util import random_name
 
 
 @dataclass(slots=True)

@@ -1,6 +1,6 @@
-from crispy.base_types import Bar, Duration, Event, Note
-from crispy.filters import name, resize
-from crispy.pat import pat
+from crispy_code.base_types import Bar, Duration, Event, Note
+from crispy_code.filters import name, resize
+from crispy_code.pat import pat
 
 
 def test_duration_add() -> None:
