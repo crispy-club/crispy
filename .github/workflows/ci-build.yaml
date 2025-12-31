@@ -32,6 +32,10 @@ jobs:
       image: "rust:1.92.0-slim-trixie"
     steps:
       - uses: actions/checkout@v4
+      - name: Install OS dependencies
+        run: |
+          apt-get update
+          apt-get install -y -qq pkg-config
       - name: Install and build
         env:
           CARGO_INCREMENTAL: '0'
