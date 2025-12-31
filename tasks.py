@@ -22,14 +22,14 @@ def code_style(ctx):
 
 @task
 def mypy_crispy(ctx):
-    cmd = f"mypy --config-file {MYPY_CONFIG} {os.path.join(DIRNAME, 'crispy')}"
+    cmd = f"mypy --config-file {MYPY_CONFIG} {os.path.join(DIRNAME, 'crispy_code')}"
     print(cmd)
     ctx.run(cmd)
 
 
 @task
 def pytest(ctx):
-    cmd = f"pytest --color=yes --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov=crispy {DIRNAME}"
+    cmd = f"pytest --color=yes --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov=crispy_code {DIRNAME}"
     print(cmd)
     ctx.run(cmd)
 

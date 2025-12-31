@@ -3,7 +3,7 @@ import operator
 
 import pytest
 
-from crispy.base_types import (
+from crispy_code.base_types import (
     Bar,
     Duration,
     Event,
@@ -14,7 +14,7 @@ from crispy.base_types import (
     Sixteenth,
     Zero,
 )
-from crispy.filters import (
+from crispy_code.filters import (
     rev,
     rot,
     tran,
@@ -29,8 +29,8 @@ from crispy.filters import (
     each,
     each_note,
 )
-from crispy.pat import pat
-from crispy.perc import Perc
+from crispy_code.pat import pat
+from crispy_code.perc import Perc
 
 
 def test_empty_pattern() -> None:

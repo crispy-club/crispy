@@ -1,5 +1,5 @@
-from crispy.pitches import C, D, Octave
-from crispy.scales import Maj
+from crispy_code.pitches import C, D, Octave
+from crispy_code.scales import Maj
 
 
 def test_scale_index() -> None:

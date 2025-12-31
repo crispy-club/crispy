@@ -3,14 +3,14 @@ import re
 from dataclasses import dataclass
 from typing import Union
 
-from crispy.base_types import (
+from crispy_code.base_types import (
     Duration,
     Event,
     Half,
     Note,
     PluginPattern,
 )
-from crispy.util import random_name
+from crispy_code.util import random_name
 
 
 class InvalidSyntaxError(Exception):

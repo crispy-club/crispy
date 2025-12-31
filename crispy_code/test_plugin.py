@@ -4,10 +4,10 @@ from unittest import mock
 import pytest
 from requests.exceptions import HTTPError
 
-from crispy.base_types import Duration, Event, Note, PluginPattern
-from crispy.filters import name
-from crispy.pat import pat
-from crispy.plugin import ch2, play
+from crispy_code.base_types import Duration, Event, Note, PluginPattern
+from crispy_code.filters import name
+from crispy_code.pat import pat
+from crispy_code.plugin import ch2, play
 
 
 def test_crispy_duration_addition() -> None:

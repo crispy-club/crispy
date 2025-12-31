@@ -3,12 +3,12 @@ from dataclasses import dataclass
 
 import click
 
-from crispy.base_types import PluginPattern
-from crispy.filters import name
-from crispy.notes import NoteNumbers
-from crispy.pat import pat as _pat
-from crispy.perc import perc as _perc
-from crispy.plugin import play, stop
+from crispy_code.base_types import PluginPattern
+from crispy_code.filters import name
+from crispy_code.notes import NoteNumbers
+from crispy_code.pat import pat as _pat
+from crispy_code.perc import perc as _perc
+from crispy_code.plugin import play, stop
 
 
 @dataclass(slots=True)

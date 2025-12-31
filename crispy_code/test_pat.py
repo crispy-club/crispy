@@ -1,8 +1,8 @@
 import pytest
 
-from crispy.base_types import Bar, Event, Half, Note, PluginPattern
-from crispy.filters import name
-from crispy.pat import (
+from crispy_code.base_types import Bar, Event, Half, Note, PluginPattern
+from crispy_code.filters import name
+from crispy_code.pat import (
     InvalidSyntaxError,
     _Group,
     _get_subgroups_r as get_subgroups_r,

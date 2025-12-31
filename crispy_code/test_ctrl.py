@@ -1,5 +1,5 @@
-from crispy.ctrl import CCEvent, ccp
-from crispy.filters import name
+from crispy_code.ctrl import CCEvent, ccp
+from crispy_code.filters import name
 
 
 def test_plugin_cc_pattern_json() -> None:
