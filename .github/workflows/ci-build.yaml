@@ -35,7 +35,7 @@ jobs:
       - name: Install OS dependencies
         run: |
           apt-get update
-          apt-get install -y -qq pkg-config
+          apt-get install -y -qq pkg-config libssl-dev
       - name: Install and build
         env:
           CARGO_INCREMENTAL: '0'
