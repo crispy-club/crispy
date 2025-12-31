@@ -1,9 +1,14 @@
 name: CI Build
+
 on:
   push:
     paths-ignore:
       - 'README.md'
   workflow_dispatch:
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+
 jobs:
   build_python_client:
     name: Build Python Client
@@ -35,7 +40,7 @@ jobs:
       - name: Install OS dependencies
         run: |
           apt-get update
-          apt-get install -y -qq pkg-config libssl-dev
+          apt-get install -y -qq pkg-config libssl-dev git curl gpg
       - name: Install and build
         env:
           CARGO_INCREMENTAL: '0'
